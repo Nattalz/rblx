@@ -1172,7 +1172,7 @@ local Window = Rayfield:CreateWindow({
         FileName = "MinesweeperBotKey",
         SaveKey = false,
         GrabKeyFromSite = false,
-        Key = {"jawaontop"}
+        Key = {"jawirontop", "JawirOnTop"}
     }
 })
 
