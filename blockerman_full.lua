@@ -1153,7 +1153,7 @@ player.CharacterAdded:Connect(onCharacterAdded)
 local Window = Rayfield:CreateWindow({
     Name = "Minesweeper Bot & ESP",
     LoadingTitle = "Minesweeper Suite",
-    LoadingSubtitle = "by Antigravity",
+    LoadingSubtitle = "by JawirHub",
     Theme = "Default",
     DisableRayfieldPrompts = false,
     DisableBuildWarnings = true,
@@ -1188,7 +1188,7 @@ HomeTab:CreateParagraph({
 })
 
 HomeTab:CreateButton({
-    Name = "Copy Discord Invite Link",
+    Name = "Join our Discord JawirHub!",
     Callback = copyDiscord
 })
 
