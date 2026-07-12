@@ -1170,7 +1170,7 @@ local Window = Rayfield:CreateWindow({
         Subtitle = "Verification Screen",
         Note = "Key is in discord.gg/gfqDhjMjtM (copied to clipboard automatically!)",
         FileName = "MinesweeperBotKey",
-        SaveKey = true,
+        SaveKey = false,
         GrabKeyFromSite = false,
         Key = {"jawaontop"}
     }
@@ -1188,7 +1188,7 @@ HomeTab:CreateParagraph({
 })
 
 HomeTab:CreateButton({
-    Name = "Join our Discord JawirHub!",
+    Name = "Copy Discord Invite Link",
     Callback = copyDiscord
 })
 
