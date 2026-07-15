@@ -1170,7 +1170,7 @@ local Window = Rayfield:CreateWindow({
         Subtitle = "Verification Screen",
         Note = "Key is in discord.gg/gfqDhjMjtM (copied to clipboard automatically!)",
         FileName = "MinesweeperBotKey",
-        SaveKey = false,
+        SaveKey = true,
         GrabKeyFromSite = false,
         Key = {"jawirontop", "JawirOnTop"}
     }
