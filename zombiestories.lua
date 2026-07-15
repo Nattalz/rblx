@@ -292,7 +292,7 @@ local function enableWeaponBuff()
                             wep.Config.BaseSpread = 0 
                             wep.Config.VerticalRecoil = 0 
                             wep.Config.HorizontalRecoil = 0 
-                            wep.Config.DelayPerShot = 0.1
+                            wep.Config.DelayPerShot = 0.07
                             wep.Config.FireMode = {"Auto", "Semi"} 
                             wep.SelFireMode = 1 
                             wep.FireMode = "Auto" 
