@@ -12,7 +12,7 @@ local SkillTreeLayouts = require(ReplicatedStorage.Shared.Registry.SkillTreeLayo
 
 -- KEY SYSTEM CONFIGURATION
 local USE_KEY_SYSTEM = true
-local KEY_URL = "https://raw.githubusercontent.com/user/Keys/main/key.txt" -- Replace with your raw key URL
+local KEY_URL = "https://raw.githubusercontent.com/Nattalz/rblx/refs/heads/main/keys/key1.txt" -- Replace with your raw key URL
 local DISCORD_INVITE = "https://discord.gg/gfqDhjMjtM"
 local STATIC_BACKUP_KEY = "JawirOnTop"
 
