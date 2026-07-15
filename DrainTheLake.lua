@@ -11,7 +11,7 @@ local Events = require(ReplicatedStorage.Verdant.Events)
 local SkillTreeLayouts = require(ReplicatedStorage.Shared.Registry.SkillTreeLayouts)
 
 -- KEY SYSTEM CONFIGURATION
-local USE_KEY_SYSTEM = true
+local USE_KEY_SYSTEM = false
 local KEY_URL = "https://raw.githubusercontent.com/Nattalz/rblx/refs/heads/main/keys/key1.txt" -- Replace with your raw key URL
 local DISCORD_INVITE = "https://discord.gg/gfqDhjMjtM"
 local STATIC_BACKUP_KEY = "JawirOnTop"
