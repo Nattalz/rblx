@@ -329,7 +329,8 @@ CombatTab:CreateToggle({
         end
     end
 })
-CombatTab:CreateToggle({
+-- REPLACE your existing Hitbox Expander toggle with this:
+local HitboxToggle = CombatTab:CreateToggle({
     Name = "Hitbox Expander",
     CurrentValue = false,
     Flag = "HitboxToggle",
@@ -341,6 +342,17 @@ CombatTab:CreateToggle({
         else 
             notify("Combat", "Hitbox Expander Reverted") 
         end
+    end
+})
+
+-- THEN add this keybind after it:
+CombatTab:CreateKeybind({
+    Name = "Toggle Hitbox (L)",
+    CurrentKeybind = "L",
+    HoldToInteract = false,
+    Flag = "HitboxKeybind",
+    Callback = function()
+        HitboxToggle:Set(not hitboxEnabled)
     end
 })
 CombatTab:CreateButton({
