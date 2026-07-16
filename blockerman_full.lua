@@ -1,5 +1,6 @@
 -- Minesweeper Solver Bot & ESP (Rayfield UI Full Suite)
--- Keysystem Key: "jawaontop"
+-- Mobile Compatible Edition with Dynamic Key Verification
+-- Keysystem Key: Dynamic fetch from GitHub, fallback "JawirOnTop"
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -7,6 +8,7 @@ local UserInputService = game:GetService("UserInputService")
 local StarterGui = game:GetService("StarterGui")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
+local HttpService = game:GetService("HttpService")
 
 local player = Players.LocalPlayer
 local autoFlagActive = false
@@ -34,6 +36,13 @@ local xToCol, zToRow = {}, {}
 local localFlags = {} -- Local tracking of flagged tiles to bypass client-server replication lag
 local deducedBombs = {} -- Cache of deduced bombs to separate logic from physical flag placement range
 
+-- Dynamic Key Configuration
+local USE_KEY_SYSTEM = true
+local KEY_URL = "https://raw.githubusercontent.com/Nattalz/rblx/refs/heads/main/keys/key1.txt"
+local DISCORD_INVITE = "https://discord.gg/gfqDhjMjtM"
+local STATIC_BACKUP_KEY = "JawirOnTop"
+local dynamicKey = STATIC_BACKUP_KEY
+
 -- UI References
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 local AutoWalkToggle, AutoFlagToggle, ESPToggle, FlyToggle
@@ -46,7 +55,36 @@ if not espFolder then
     espFolder.Parent = workspace
 end
 
--- Rayfield Notification Helper
+-- ============================================
+-- DYNAMIC KEY FETCHING
+-- ============================================
+
+local function fetchDynamicKey()
+    local success, result = pcall(function()
+        return game:HttpGet(KEY_URL, true)
+    end)
+    
+    if success and result then
+        -- Clean whitespace/newlines
+        local cleaned = result:gsub("^%s*(.-)%s*$", "%1")
+        if #cleaned > 0 and cleaned ~= "404: Not Found" then
+            dynamicKey = cleaned
+            print("[KeySystem] Dynamic key fetched successfully: " .. cleaned)
+            return cleaned
+        end
+    end
+    
+    print("[KeySystem] Failed to fetch dynamic key, using static fallback: " .. STATIC_BACKUP_KEY)
+    return STATIC_BACKUP_KEY
+end
+
+-- Fetch key on load
+fetchDynamicKey()
+
+-- ============================================
+-- RAYFIELD NOTIFICATION HELPER
+-- ============================================
+
 local function notify(title, content)
     pcall(function()
         Rayfield:Notify({
@@ -57,7 +95,10 @@ local function notify(title, content)
     end)
 end
 
--- Auto-copy Discord Invite Link
+-- ============================================
+-- DISCORD AUTO-COPY
+-- ============================================
+
 local function copyDiscord()
     local link = "https://discord.gg/gfqDhjMjtM"
     local success = pcall(function()
@@ -77,28 +118,140 @@ end
 -- Run auto-copy on load
 copyDiscord()
 
--- Safely extracts secret authentication key from MouseControl script upvalues
+-- ============================================
+-- MOBILE-COMPATIBLE SECRET KEY SCANNER
+-- ============================================
+
+--[[
+    Scans input connections across ALL input methods:
+    - Mouse (Button1Down, Button2Down) — Desktop
+    - Touch (TouchTap, TouchTapInWorld) — Mobile
+    - Generic Input (InputBegan, InputEnded) — Universal fallback
+    Recursively scans upvalues and nested function closures.
+]]
+
+local function scanUpvaluesForKey(func, depth, maxDepth)
+    depth = depth or 0
+    maxDepth = maxDepth or 3
+    
+    if depth > maxDepth then return nil end
+    
+    local ok, upvals = pcall(debug.getupvalues, func)
+    if not ok or not upvals then return nil end
+    
+    for k, v in pairs(upvals) do
+        if type(v) == "string" and (tonumber(v) ~= nil or #v > 10) then
+            return v
+        elseif type(v) == "number" then
+            return tostring(v)
+        elseif type(v) == "function" then
+            local nested = scanUpvaluesForKey(v, depth + 1, maxDepth)
+            if nested then return nested end
+        end
+    end
+    
+    return nil
+end
+
+local function getConnectionsForEvent(event)
+    local connections = {}
+    local success, conns = pcall(getconnections, event)
+    if success and conns then
+        for _, conn in ipairs(conns) do
+            table.insert(connections, conn)
+        end
+    end
+    return connections
+end
+
 local function getSecretKey()
+    -- Try mouse events first (desktop)
     local mouse = player:GetMouse()
-    local connections = getconnections(mouse.Button1Down)
-    for _, conn in ipairs(connections) do
-        local func = conn.Function
-        if func then
-            local ok, upvals = pcall(debug.getupvalues, func)
-            if ok then
-                for k, v in pairs(upvals) do
-                    if type(v) == "string" and (tonumber(v) ~= nil or #v > 10) then
-                        return v
-                    elseif type(v) == "number" then
-                        return tostring(v)
+    local mouseEvents = {
+        mouse.Button1Down,
+        mouse.Button2Down
+    }
+    
+    for _, event in ipairs(mouseEvents) do
+        local connections = getConnectionsForEvent(event)
+        for _, conn in ipairs(connections) do
+            local func = conn.Function
+            if func then
+                local key = scanUpvaluesForKey(func)
+                if key then return key end
+            end
+        end
+    end
+    
+    -- Try touch events (mobile)
+    local touchEvents = {
+        UserInputService.TouchTap,
+        UserInputService.TouchTapInWorld,
+        UserInputService.TouchLongPress,
+        UserInputService.TouchMoved,
+        UserInputService.TouchPan,
+        UserInputService.TouchPinch,
+        UserInputService.TouchRotate,
+        UserInputService.TouchSwipe,
+        UserInputService.TouchStarted,
+        UserInputService.TouchEnded
+    }
+    
+    for _, event in ipairs(touchEvents) do
+        local connections = getConnectionsForEvent(event)
+        for _, conn in ipairs(connections) do
+            local func = conn.Function
+            if func then
+                local key = scanUpvaluesForKey(func)
+                if key then return key end
+            end
+        end
+    end
+    
+    -- Try generic input events (universal fallback)
+    local inputEvents = {
+        UserInputService.InputBegan,
+        UserInputService.InputEnded,
+        UserInputService.InputChanged
+    }
+    
+    for _, event in ipairs(inputEvents) do
+        local connections = getConnectionsForEvent(event)
+        for _, conn in ipairs(connections) do
+            local func = conn.Function
+            if func then
+                local key = scanUpvaluesForKey(func)
+                if key then return key end
+            end
+        end
+    end
+    
+    -- Final fallback: scan common remotes for auth patterns
+    local eventsFolder = ReplicatedStorage:FindFirstChild("Events")
+    if eventsFolder then
+        local flagEvents = eventsFolder:FindFirstChild("FlagEvents")
+        if flagEvents then
+            local placeFlag = flagEvents:FindFirstChild("PlaceFlag")
+            if placeFlag then
+                local connections = getConnectionsForEvent(placeFlag.OnClientEvent)
+                for _, conn in ipairs(connections) do
+                    local func = conn.Function
+                    if func then
+                        local key = scanUpvaluesForKey(func)
+                        if key then return key end
                     end
                 end
             end
         end
     end
+    
+    return nil
 end
 
--- Check if flagged specifically on server
+-- ============================================
+-- FLAG & BLOCK CHECKS
+-- ============================================
+
 local function hasServerFlag(part)
     if not part then return false end
     for _, child in ipairs(part:GetChildren()) do
@@ -109,22 +262,22 @@ local function hasServerFlag(part)
     return false
 end
 
--- Solver uses strictly our own deduced/local flags to prevent other players' wrong flags from ruining deductions
 local function checkFlagged(part)
     return localFlags[part] == true or deducedBombs[part] == true
 end
 
--- Pathfinder and guesser treat any flag (ours or other players') as blocked to avoid stepping on them
 local function checkBlocked(part)
     return localFlags[part] == true or deducedBombs[part] == true or hasServerFlag(part)
 end
 
--- Clear ESP highlights
+-- ============================================
+-- ESP SYSTEM
+-- ============================================
+
 local function clearESP()
     espFolder:ClearAllChildren()
 end
 
--- Draw ESP highlights
 local function updateESP(safeTiles, deducedBombs, borderProbabilities)
     clearESP()
     if not espActive then return end
@@ -196,7 +349,10 @@ local function updateESP(safeTiles, deducedBombs, borderProbabilities)
     end
 end
 
--- Initialize grid mapping (compatible with any grid size)
+-- ============================================
+-- GRID INITIALIZATION
+-- ============================================
+
 local function initGrid()
     grid = {}
     xToCol = {}
@@ -271,7 +427,6 @@ local function initGrid()
     print("Grid mapped successfully: " .. W .. "x" .. H)
 end
 
--- Checks if the mapped grid parts are still valid
 local function checkGridValid()
     if W == 0 or H == 0 then return false end
     for col = 1, W do
@@ -285,7 +440,10 @@ local function checkGridValid()
     return true
 end
 
--- Scan board state
+-- ============================================
+-- BOARD SCANNING
+-- ============================================
+
 local function scanBoard()
     local state = {}
     for col = 1, W do
@@ -319,7 +477,10 @@ local function scanBoard()
     return state
 end
 
--- Find player's current grid position
+-- ============================================
+-- PATHFINDING
+-- ============================================
+
 local function getCurrentPlayerGrid()
     local char = player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
@@ -344,7 +505,6 @@ local function getCurrentPlayerGrid()
     return nearestCol, nearestRow
 end
 
--- BFS Pathfinding (allows walking on physically flagged tiles on the server to avoid detours)
 local function findPath(startCol, startRow, targetCol, targetRow)
     local queue = {{startCol, startRow, {}}}
     local visited = {}
@@ -358,9 +518,7 @@ local function findPath(startCol, startRow, targetCol, targetRow)
             return path
         end
         
-        local dirs = {
-            {1, 0}, {-1, 0}, {0, 1}, {0, -1}
-        }
+        local dirs = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
         for _, dir in ipairs(dirs) do
             local nc = c + dir[1]
             local nr = r + dir[2]
@@ -382,7 +540,6 @@ local function findPath(startCol, startRow, targetCol, targetRow)
     return nil
 end
 
--- Finds all opened tiles that are reachable from the player's position
 local function getConnectedComponent(startCol, startRow)
     local queue = {{startCol, startRow}}
     local visited = {}
@@ -394,9 +551,7 @@ local function getConnectedComponent(startCol, startRow)
         local c, r = curr[1], curr[2]
         table.insert(component, grid[c][r])
         
-        local dirs = {
-            {1, 0}, {-1, 0}, {0, 1}, {0, -1}
-        }
+        local dirs = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
         for _, dir in ipairs(dirs) do
             local nc = c + dir[1]
             local nr = r + dir[2]
@@ -415,7 +570,6 @@ local function getConnectedComponent(startCol, startRow)
     return component
 end
 
--- Finds unopened, unblocked tiles adjacent to the player's connected component
 local function getLocalGuessCandidates(pCol, pRow)
     local component = getConnectedComponent(pCol, pRow)
     local candidates = {}
@@ -444,7 +598,10 @@ local function getLocalGuessCandidates(pCol, pRow)
     return candidates
 end
 
--- Matrix / Backtracking solver for complex local patterns and exact probabilities
+-- ============================================
+-- SOLVER ENGINE
+-- ============================================
+
 local function solveEquations(safeTiles, deducedBombs, borderProbabilities)
     local clues = {}
     local borderMap = {}
@@ -617,7 +774,6 @@ local function solveEquations(safeTiles, deducedBombs, borderProbabilities)
     end
 end
 
--- Shared Board Solver Function (Used by both Auto Flag, Auto Walk and manual ESP)
 local function updateDeductions()
     -- Double scan for consistency
     local state1 = scanBoard()
@@ -757,7 +913,10 @@ local function updateDeductions()
     return true, safeTiles, borderProbabilities, deducedNewBomb
 end
 
--- Move character to a tile part center
+-- ============================================
+-- MOVEMENT & WALKING
+-- ============================================
+
 local function walkTo(part)
     local char = player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
@@ -779,7 +938,6 @@ local function walkTo(part)
     end
 end
 
--- Walk list of parts in sequence
 local function walkPath(path)
     for _, part in ipairs(path) do
         if not autoWalkActive then break end
@@ -787,7 +945,6 @@ local function walkPath(path)
     end
 end
 
--- Wait for pending flags to be placed (latency sync protection for Auto Walk)
 local function waitForFlags()
     if not autoFlagActive then return end
     local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
@@ -818,7 +975,10 @@ local function waitForFlags()
     end
 end
 
--- 1. AUTO FLAG LOOP
+-- ============================================
+-- AUTO LOOPS
+-- ============================================
+
 local function autoFlagLoop()
     while autoFlagActive do
         local gameRunningVal = ReplicatedStorage:FindFirstChild("Info") and ReplicatedStorage.Info:FindFirstChild("GameRunning") and ReplicatedStorage.Info.GameRunning.Value
@@ -856,7 +1016,6 @@ local function autoFlagLoop()
     end
 end
 
--- 2. AUTO WALK LOOP
 local function autoWalkLoop()
     while autoWalkActive do
         local gameRunningVal = ReplicatedStorage:FindFirstChild("Info") and ReplicatedStorage.Info:FindFirstChild("GameRunning") and ReplicatedStorage.Info.GameRunning.Value
@@ -1014,7 +1173,6 @@ local function autoWalkLoop()
     end
 end
 
--- 3. ESP STANDALONE LOOP (Auto refresh when bot is off)
 local function espLoop()
     while espActive do
         if not autoWalkActive and not autoFlagActive then
@@ -1043,7 +1201,19 @@ local function espLoop()
     end
 end
 
--- Character Fly Implementation
+-- ============================================
+-- MOBILE-COMPATIBLE FLY MODE
+-- ============================================
+
+--[[
+    Fly mode now supports both:
+    - Desktop: WASD + Space/Shift with camera-relative vectors
+    - Mobile: Virtual joystick via Humanoid.MoveDirection
+    
+    Humanoid.MoveDirection is automatically populated by Roblox
+    when the player uses the mobile thumbstick.
+]]
+
 local function startFlying()
     local char = player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
@@ -1071,18 +1241,29 @@ local function startFlying()
             local camera = workspace.CurrentCamera
             local moveDir = Vector3.new(0, 0, 0)
             
-            if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-                moveDir = moveDir + camera.CFrame.LookVector
+            -- PRIORITY 1: Mobile joystick input (Humanoid.MoveDirection)
+            -- This is automatically set by Roblox when using touch thumbstick
+            local joystickDir = hum.MoveDirection
+            if joystickDir.Magnitude > 0.1 then
+                -- Mobile joystick is active, use camera-relative direction
+                moveDir = camera.CFrame:VectorToWorldSpace(joystickDir)
+            else
+                -- PRIORITY 2: Desktop keyboard fallback
+                if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                    moveDir = moveDir + camera.CFrame.LookVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                    moveDir = moveDir - camera.CFrame.LookVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                    moveDir = moveDir - camera.CFrame.RightVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                    moveDir = moveDir + camera.CFrame.RightVector
+                end
             end
-            if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-                moveDir = moveDir - camera.CFrame.LookVector
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-                moveDir = moveDir - camera.CFrame.RightVector
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-                moveDir = moveDir + camera.CFrame.RightVector
-            end
+            
+            -- Vertical input (works on both mobile and desktop)
             if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
                 moveDir = moveDir + Vector3.new(0, 1, 0)
             end
@@ -1090,7 +1271,13 @@ local function startFlying()
                 moveDir = moveDir - Vector3.new(0, 1, 0)
             end
             
-            flyVelocity.velocity = moveDir.Magnitude > 0 and (moveDir.Unit * flySpeed) or Vector3.new(0, 0, 0)
+            -- Apply velocity
+            if moveDir.Magnitude > 0 then
+                flyVelocity.velocity = moveDir.Unit * flySpeed
+            else
+                flyVelocity.velocity = Vector3.new(0, 0.1, 0) -- Hover
+            end
+            
             flyGyro.cframe = camera.CFrame
             task.wait()
         end
@@ -1120,7 +1307,10 @@ local function toggleFly(val)
     end
 end
 
--- Infinite Jump Listener
+-- ============================================
+-- INFINITE JUMP & CHARACTER HANDLING
+-- ============================================
+
 UserInputService.JumpRequest:Connect(function()
     if infiniteJump then
         local char = player.Character
@@ -1131,7 +1321,6 @@ UserInputService.JumpRequest:Connect(function()
     end
 end)
 
--- Reset speed/jump on respawn
 local function onCharacterAdded(char)
     local hum = char:WaitForChild("Humanoid", 5)
     if hum then
@@ -1149,7 +1338,17 @@ if player.Character then
 end
 player.CharacterAdded:Connect(onCharacterAdded)
 
--- UI Setup via Rayfield Interface Suite
+-- ============================================
+-- RAYFIELD UI SETUP
+-- ============================================
+
+-- Build key array with dynamic + static variants
+local keyArray = {STATIC_BACKUP_KEY, STATIC_BACKUP_KEY:lower()}
+if dynamicKey and dynamicKey ~= STATIC_BACKUP_KEY then
+    table.insert(keyArray, dynamicKey)
+    table.insert(keyArray, dynamicKey:lower())
+end
+
 local Window = Rayfield:CreateWindow({
     Name = "Minesweeper Bot & ESP",
     LoadingTitle = "Minesweeper Suite",
@@ -1164,7 +1363,7 @@ local Window = Rayfield:CreateWindow({
         RememberJoins = false
     },
     
-    KeySystem = true,
+    KeySystem = USE_KEY_SYSTEM,
     KeySettings = {
         Title = "Minesweeper Bot Key",
         Subtitle = "Verification Screen",
@@ -1172,7 +1371,7 @@ local Window = Rayfield:CreateWindow({
         FileName = "MinesweeperBotKey",
         SaveKey = true,
         GrabKeyFromSite = false,
-        Key = {"jawirontop", "JawirOnTop"}
+        Key = keyArray
     }
 })
 
@@ -1184,12 +1383,21 @@ local HomeTab = Window:CreateTab("Home", "home")
 
 HomeTab:CreateParagraph({
     Title = "Minesweeper Solver Suite",
-    Content = "Full Solver Bot & ESP edition using Rayfield UI. Press RightShift to hide the UI menu."
+    Content = "Full Solver Bot & ESP edition using Rayfield UI. Press RightShift to hide the UI menu. Mobile joystick supported for fly mode!"
 })
 
 HomeTab:CreateButton({
     Name = "Copy Discord Invite Link",
     Callback = copyDiscord
+})
+
+-- Refresh dynamic key button
+HomeTab:CreateButton({
+    Name = "Refresh Dynamic Key",
+    Callback = function()
+        local newKey = fetchDynamicKey()
+        notify("Key Refreshed", "New key: " .. newKey:sub(1, 10) .. "...")
+    end
 })
 
 -- Shut down UI completely
@@ -1433,4 +1641,4 @@ MoveTab:CreateSlider({
     end
 })
 
-print("Minesweeper Full Suite Script with Rayfield UI Loaded!")
+print("Minesweeper Full Suite Script with Mobile Support & Dynamic Keys Loaded!")
