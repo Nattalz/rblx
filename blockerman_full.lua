@@ -32,7 +32,7 @@ local flagDistance = 15   -- studs — how close a bomb must be to get flagged
 local flagDelay = 0.45    -- seconds between each flag placement
 
 -- ESP refresh interval
-local espRefreshInterval = 0.12  -- seconds between ESP recalculation passes
+local espRefreshInterval = 0.2  -- seconds between ESP recalculation passes
 local _lastEspRefresh = 0
 
 -- ESP Color configuration
