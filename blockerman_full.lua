@@ -75,7 +75,7 @@ local function fetchDynamicKey()
     end
     
     print("[KeySystem] Failed to fetch dynamic key, using static fallback: " .. STATIC_BACKUP_KEY)
-    return STATIC_BACKUP_KEY
+    return STATIC_BACKBEK_KEY
 end
 
 -- Fetch key on load
@@ -123,128 +123,143 @@ copyDiscord()
 -- ============================================
 
 --[[
-    Scans input connections across ALL input methods:
-    - Mouse (Button1Down, Button2Down) — Desktop
-    - Touch (TouchTap, TouchTapInWorld) — Mobile
-    - Generic Input (InputBegan, InputEnded) — Universal fallback
-    Recursively scans upvalues and nested function closures.
+    Scans garbage collection and upvalues across execution boundaries.
+    Optimized for Delta, Codex, Arceus X, and other Android executors.
+    Uses pcall to prevent crashes when accessing protected core functions.
 ]]
 
-local function scanUpvaluesForKey(func, depth, maxDepth)
-    depth = depth or 0
-    maxDepth = maxDepth or 3
-    
-    if depth > maxDepth then return nil end
-    
-    local ok, upvals = pcall(debug.getupvalues, func)
-    if not ok or not upvals then return nil end
-    
-    for k, v in pairs(upvals) do
-        if type(v) == "string" and (tonumber(v) ~= nil or #v > 10) then
-            return v
-        elseif type(v) == "number" then
-            return tostring(v)
-        elseif type(v) == "function" then
-            local nested = scanUpvaluesForKey(v, depth + 1, maxDepth)
-            if nested then return nested end
-        end
-    end
-    
-    return nil
-end
-
-local function getConnectionsForEvent(event)
-    local connections = {}
-    local success, conns = pcall(getconnections, event)
-    if success and conns then
-        for _, conn in ipairs(conns) do
-            table.insert(connections, conn)
-        end
-    end
-    return connections
-end
-
 local function getSecretKey()
-    -- Try mouse events first (desktop)
-    local mouse = player:GetMouse()
-    local mouseEvents = {
-        mouse.Button1Down,
-        mouse.Button2Down
-    }
-    
-    for _, event in ipairs(mouseEvents) do
-        local connections = getConnectionsForEvent(event)
-        for _, conn in ipairs(connections) do
-            local func = conn.Function
-            if func then
-                local key = scanUpvaluesForKey(func)
-                if key then return key end
+    -- 1. Check workspace first in case it still exists
+    local salasana = workspace:FindFirstChild("Salasana")
+    if salasana and salasana:IsA("ValueObject") and salasana.Value ~= 0 then
+        return tostring(salasana.Value)
+    end
+
+    -- 2. Scan garbage collection for MouseControl values
+    if getgc then
+        for _, v in pairs(getgc(true)) do
+            if type(v) == "function" then
+                local ok, info = pcall(debug.info, v, "s")
+                info = ok and info or ""
+                if info:find("MouseControl") then
+                    local ok2, upvals = pcall(debug.getupvalues, v)
+                    if ok2 and upvals then
+                        local hasPlaceFlag = false
+                        local potentialKey = nil
+                        for _, uv in pairs(upvals) do
+                            if typeof(uv) == "Instance" and (uv.Name == "PlaceFlag" or uv.Name == "FlagEvents" or uv.Name == "ReplicatedStorage") then
+                                hasPlaceFlag = true
+                            elseif type(uv) == "string" and #uv >= 10 and tonumber(uv) ~= nil then
+                                potentialKey = uv
+                            elseif type(uv) == "number" and uv > 1000 then
+                                potentialKey = tostring(uv)
+                            end
+                        end
+                        if hasPlaceFlag and potentialKey then
+                            return potentialKey
+                        end
+                    end
+                end
             end
         end
-    end
-    
-    -- Try touch events (mobile)
-    local touchEvents = {
-        UserInputService.TouchTap,
-        UserInputService.TouchTapInWorld,
-        UserInputService.TouchLongPress,
-        UserInputService.TouchMoved,
-        UserInputService.TouchPan,
-        UserInputService.TouchPinch,
-        UserInputService.TouchRotate,
-        UserInputService.TouchSwipe,
-        UserInputService.TouchStarted,
-        UserInputService.TouchEnded
-    }
-    
-    for _, event in ipairs(touchEvents) do
-        local connections = getConnectionsForEvent(event)
-        for _, conn in ipairs(connections) do
-            local func = conn.Function
-            if func then
-                local key = scanUpvaluesForKey(func)
-                if key then return key end
-            end
-        end
-    end
-    
-    -- Try generic input events (universal fallback)
-    local inputEvents = {
-        UserInputService.InputBegan,
-        UserInputService.InputEnded,
-        UserInputService.InputChanged
-    }
-    
-    for _, event in ipairs(inputEvents) do
-        local connections = getConnectionsForEvent(event)
-        for _, conn in ipairs(connections) do
-            local func = conn.Function
-            if func then
-                local key = scanUpvaluesForKey(func)
-                if key then return key end
-            end
-        end
-    end
-    
-    -- Final fallback: scan common remotes for auth patterns
-    local eventsFolder = ReplicatedStorage:FindFirstChild("Events")
-    if eventsFolder then
-        local flagEvents = eventsFolder:FindFirstChild("FlagEvents")
-        if flagEvents then
-            local placeFlag = flagEvents:FindFirstChild("PlaceFlag")
-            if placeFlag then
-                local connections = getConnectionsForEvent(placeFlag.OnClientEvent)
-                for _, conn in ipairs(connections) do
-                    local func = conn.Function
-                    if func then
-                        local key = scanUpvaluesForKey(func)
-                        if key then return key end
+
+        -- Generic GC fallback scanning
+        for _, v in pairs(getgc(true)) do
+            if type(v) == "function" then
+                local ok2, upvals = pcall(debug.getupvalues, v)
+                if ok2 and upvals then
+                    local hasPlaceFlag = false
+                    local potentialKey = nil
+                    for _, uv in pairs(upvals) do
+                        if typeof(uv) == "Instance" and (uv.Name == "PlaceFlag" or uv.Name == "FlagEvents" or uv.Name == "ReplicatedStorage") then
+                            hasPlaceFlag = true
+                        elseif type(uv) == "string" and #uv >= 10 and tonumber(uv) ~= nil then
+                            potentialKey = uv
+                        elseif type(uv) == "number" and uv > 1000 then
+                            potentialKey = tostring(uv)
+                        end
+                    end
+                    if hasPlaceFlag and potentialKey then
+                        return potentialKey
                     end
                 end
             end
         end
     end
-    
+
+    -- 3. Fallback: standard connection scanning (for PC compatibility)
+    local function scanUpvaluesForKey(func, depth, maxDepth)
+        depth = depth or 0
+        maxDepth = maxDepth or 3
+        if depth > maxDepth then return nil end
+        
+        local ok, upvals = pcall(debug.getupvalues, func)
+        if not ok or not upvals then return nil end
+        
+        for k, v in pairs(upvals) do
+            if type(v) == "string" and (tonumber(v) ~= nil or #v > 10) then
+                return v
+            elseif type(v) == "number" then
+                return tostring(v)
+            elseif type(v) == "function" then
+                local nested = scanUpvaluesForKey(v, depth + 1, maxDepth)
+                if nested then return nested end
+            end
+        end
+        return nil
+    end
+
+    local function getConnectionsForEvent(event)
+        local connections = {}
+        local success, conns = pcall(getconnections, event)
+        if success and conns then
+            for _, conn in ipairs(conns) do
+                table.insert(connections, conn)
+            end
+        end
+        return connections
+    end
+
+    local mouse = player:GetMouse()
+    local mouseEvents = {mouse.Button1Down, mouse.Button2Down}
+    for _, event in ipairs(mouseEvents) do
+        for _, conn in ipairs(getConnectionsForEvent(event)) do
+            local func = conn.Function
+            if func then
+                local key = scanUpvaluesForKey(func)
+                if key then return key end
+            end
+        end
+    end
+
+    local touchEvents = {
+        UserInputService.TouchTap, UserInputService.TouchTapInWorld,
+        UserInputService.TouchLongPress, UserInputService.TouchMoved,
+        UserInputService.TouchPan, UserInputService.TouchPinch,
+        UserInputService.TouchRotate, UserInputService.TouchSwipe,
+        UserInputService.TouchStarted, UserInputService.TouchEnded
+    }
+    for _, event in ipairs(touchEvents) do
+        for _, conn in ipairs(getConnectionsForEvent(event)) do
+            local func = conn.Function
+            if func then
+                local key = scanUpvaluesForKey(func)
+                if key then return key end
+            end
+        end
+    end
+
+    local inputEvents = {UserInputService.InputBegan, UserInputService.InputEnded, UserInputService.InputChanged}
+    for _, event in ipairs(inputEvents) do
+        for _, conn in ipairs(getConnectionsForEvent(event)) do
+            local func = conn.Function
+            if func then
+                local key = scanUpvaluesForKey(func)
+                if key then return key end
+            end
+        end
+    end
+
     return nil
 end
 
@@ -278,7 +293,7 @@ local function clearESP()
     espFolder:ClearAllChildren()
 end
 
-local function updateESP(safeTiles, deducedBombs, borderProbabilities)
+local function updateESP(safeTiles, borderProbabilities)
     clearESP()
     if not espActive then return end
     
@@ -362,7 +377,8 @@ local function initGrid()
     clearESP()
     
     local flag = workspace:FindFirstChild("Flag")
-    local parts = flag and flag:FindFirstChild("Parts") and flag.Parts:GetChildren()
+    local partsFolder = flag and flag:FindFirstChild("Parts")
+    local parts = partsFolder and partsFolder:GetChildren()
     if not parts then return end
     
     local xCoords = {}
@@ -430,9 +446,10 @@ end
 local function checkGridValid()
     if W == 0 or H == 0 then return false end
     for col = 1, W do
+        if not grid[col] then return false end
         for row = 1, H do
             local cell = grid[col][row]
-            if not cell.part or not cell.part:IsDescendantOf(workspace) then
+            if not cell or not cell.part or not cell.part:IsDescendantOf(workspace) then
                 return false
             end
         end
@@ -602,7 +619,7 @@ end
 -- SOLVER ENGINE
 -- ============================================
 
-local function solveEquations(safeTiles, deducedBombs, borderProbabilities)
+local function solveEquations(safeTiles, borderProbabilities)
     local clues = {}
     local borderMap = {}
     local borderList = {}
@@ -852,7 +869,7 @@ local function updateDeductions()
     
     -- Matrix & Probability Solver
     if not deducedNewBomb then
-        solveEquations(safeTiles, deducedBombs, borderProbabilities)
+        solveEquations(safeTiles, borderProbabilities)
         
         -- Fallback single-cell rules
         for col = 1, W do
@@ -907,7 +924,7 @@ local function updateDeductions()
     
     -- Render ESP
     if espActive then
-        updateESP(safeTiles, deducedBombs, borderProbabilities)
+        updateESP(safeTiles, borderProbabilities)
     end
     
     return true, safeTiles, borderProbabilities, deducedNewBomb
@@ -945,274 +962,374 @@ local function walkPath(path)
     end
 end
 
-local function waitForFlags()
-    if not autoFlagActive then return end
-    local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-    
-    local key = getSecretKey()
-    if not key then return end
-    
-    local startTime = os.clock()
-    while os.clock() - startTime < 0.5 do
-        local allFlagged = true
-        for part in pairs(deducedBombs) do
-            if part and part.Parent then
-                local dist = (part.Position - root.Position).Magnitude
-                if dist < 25 then
-                    if not hasServerFlag(part) then
-                        allFlagged = false
-                        ReplicatedStorage.Events.FlagEvents.PlaceFlag:FireServer(part, key, true)
-                        localFlags[part] = true
-                    end
-                end
-            end
-        end
-        if allFlagged then
-            break
-        end
-        task.wait(0.05)
-    end
-end
-
 -- ============================================
--- AUTO LOOPS
+-- CONSOLIDATED BOARD MANAGER & EVENT SYSTEM
 -- ============================================
 
-local function autoFlagLoop()
-    while autoFlagActive do
-        local gameRunningVal = ReplicatedStorage:FindFirstChild("Info") and ReplicatedStorage.Info:FindFirstChild("GameRunning") and ReplicatedStorage.Info.GameRunning.Value
-        if not gameRunningVal then
-            task.wait(1)
-            continue
-        end
-        
-        if not checkGridValid() then
-            initGrid()
-        end
-        
-        local success = updateDeductions()
-        if not success then
-            task.wait(0.05)
-            continue
-        end
-        
-        -- Place flags on deduced bombs in range
-        local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-        local key = getSecretKey()
-        if root and key then
-            for part in pairs(deducedBombs) do
-                if not hasServerFlag(part) then
-                    local dist = (part.Position - root.Position).Magnitude
-                    if dist < 25 then
-                        print("Auto Flag: Placed flag at distance " .. string.format("%.1f", dist) .. " studs")
-                        ReplicatedStorage.Events.FlagEvents.PlaceFlag:FireServer(part, key, true)
-                        localFlags[part] = true
-                    end
-                end
-            end
-        end
-        task.wait(0.1)
-    end
-end
-
-local function autoWalkLoop()
-    while autoWalkActive do
-        local gameRunningVal = ReplicatedStorage:FindFirstChild("Info") and ReplicatedStorage.Info:FindFirstChild("GameRunning") and ReplicatedStorage.Info.GameRunning.Value
-        if not gameRunningVal then
-            print("Auto Walk: Waiting for game to start...")
-            localFlags = {}
-            deducedBombs = {}
-            clearESP()
-            while not (ReplicatedStorage:FindFirstChild("Info") and ReplicatedStorage.Info:FindFirstChild("GameRunning") and ReplicatedStorage.Info.GameRunning.Value) and autoWalkActive do
-                task.wait(1)
-            end
-            if autoWalkActive then
-                task.wait(2) -- Wait for board parts replication
-                initGrid()
-            end
-            continue
-        end
-        
-        if not checkGridValid() then
-            initGrid()
-        end
-        
-        -- Safety sync: wait for flags to replicate before stepping
-        waitForFlags()
-        
-        local success, safeTiles, borderProbabilities, deducedNewBomb = updateDeductions()
-        if not success then
-            task.wait(0.05)
-            continue
-        end
-        
-        local pCol, pRow = getCurrentPlayerGrid()
-        if not pCol or not pRow then
-            task.wait(0.5)
-            continue
-        end
-        
-        local openedCount = 0
-        for col = 1, W do
-            for row = 1, H do
-                if grid[col][row].isOpened then
-                    openedCount = openedCount + 1
-                end
-            end
-        end
-        
-        -- First move of the game
-        if openedCount == 0 then
-            local midCol = math.floor(W / 2) + 1
-            local midRow = math.floor(H / 2) + 1
-            notify("Minesweeper Bot", "Starting game...")
-            local targetPart = grid[midCol][midRow].part
-            if targetPart then
-                walkTo(targetPart)
-                task.wait(0.5)
-            end
-            continue
-        end
-        
-        local key = getSecretKey()
-        if not key then
-            print("Auto Walk: Auth key missing. Waiting...")
-            task.wait(0.5)
-            continue
-        end
-        
-        if deducedNewBomb then
-            task.wait(0.05)
-            continue
-        end
-        
-        -- Walk to nearest safe tile
-        local targetCell = nil
-        local bestPath = nil
-        local minPathLen = math.huge
-        
-        for _, cell in pairs(safeTiles) do
-            local path = findPath(pCol, pRow, cell.col, cell.row)
-            if path and #path < minPathLen then
-                minPathLen = #path
-                targetCell = cell
-                bestPath = path
-            end
-        end
-        
-        if bestPath and targetCell then
-            print("Walking to safe tile: (" .. targetCell.col .. ", " .. targetCell.row .. ")")
-            walkPath(bestPath)
-            
-            -- Wait for target tile to open
-            local startWait = os.clock()
-            while not targetCell.part:FindFirstChild("NumberGui") and os.clock() - startWait < 1.5 and autoWalkActive do
-                task.wait(0.05)
-            end
-        else
-            -- Stuck! Probability guessing
-            local bestGuessCell = nil
-            local minProb = math.huge
-            
-            for part, P in pairs(borderProbabilities) do
-                local x = math.floor(part.Position.X + 0.5)
-                local z = math.floor(part.Position.Z + 0.5)
-                local col = xToCol[x]
-                local row = zToRow[z]
-                if col and row then
-                    local cell = grid[col][row]
-                    if P < minProb then
-                        minProb = P
-                        bestGuessCell = cell
-                    end
-                end
-            end
-            
-            if bestGuessCell then
-                print("Stuck! Optimal guess (" .. string.format("%.0f%%", minProb * 100) .. " bomb chance) at (" .. bestGuessCell.col .. ", " .. bestGuessCell.row .. ")")
-                local path = findPath(pCol, pRow, bestGuessCell.col, bestGuessCell.row)
-                if path then
-                    walkPath(path)
-                else
-                    walkTo(bestGuessCell.part)
-                end
-                
-                local startWait = os.clock()
-                while not bestGuessCell.part:FindFirstChild("NumberGui") and os.clock() - startWait < 1.5 and autoWalkActive do
-                    task.wait(0.05)
-                end
-            else
-                -- Random local guess fallback
-                local candidates = getLocalGuessCandidates(pCol, pRow)
-                if #candidates > 0 then
-                    local guessCell = candidates[math.random(1, #candidates)]
-                    print("No probabilities. Random guess at (" .. guessCell.col .. ", " .. guessCell.row .. ")")
-                    local path = findPath(pCol, pRow, guessCell.col, guessCell.row)
-                    if path then
-                        walkPath(path)
-                    else
-                        walkTo(guessCell.part)
-                    end
-                    
-                    local startWait = os.clock()
-                    while not guessCell.part:FindFirstChild("NumberGui") and os.clock() - startWait < 1.5 and autoWalkActive do
-                        task.wait(0.05)
-                    end
-                else
-                    print("No reachable/local candidates found! Stopping Auto Walk.")
-                    autoWalkActive = false
-                    if AutoWalkToggle then
-                        AutoWalkToggle:Set(false)
-                    end
-                    notify("Minesweeper Bot", "Auto Walk stopped (no candidates).")
-                end
-            end
-        end
+-- Unified task manager to eliminate race conditions between auto flag, auto walk, and ESP
+task.spawn(function()
+    while true do
         task.wait(0.05)
-    end
-end
-
-local function espLoop()
-    while espActive do
-        if not autoWalkActive and not autoFlagActive then
+        
+        -- Keep grid mapped and synchronized if any active feature is enabled
+        if autoWalkActive or autoFlagActive or espActive then
             local gameRunningVal = ReplicatedStorage:FindFirstChild("Info") and ReplicatedStorage.Info:FindFirstChild("GameRunning") and ReplicatedStorage.Info.GameRunning.Value
             if not gameRunningVal then
                 localFlags = {}
                 deducedBombs = {}
                 clearESP()
-                while not (ReplicatedStorage:FindFirstChild("Info") and ReplicatedStorage.Info:FindFirstChild("GameRunning") and ReplicatedStorage.Info.GameRunning.Value) and espActive and not autoWalkActive and not autoFlagActive do
-                    task.wait(1)
-                end
-                if espActive and not autoWalkActive and not autoFlagActive then
-                    task.wait(2)
-                    initGrid()
-                end
+                task.wait(0.5)
                 continue
             end
-            
+
+            -- Safely load grid map
             if not checkGridValid() then
                 initGrid()
+                task.wait(0.1)
+                continue
             end
-            
-            updateDeductions()
+
+            -- Update tile state and perform deductions
+            local success, safeTiles, borderProbabilities, deducedNewBomb = updateDeductions()
+            if not success then
+                continue
+            end
+
+            -- Auto Flag Logic
+            if autoFlagActive then
+                local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                local key = getSecretKey()
+                if root and key then
+                    for part in pairs(deducedBombs) do
+                        if not hasServerFlag(part) then
+                            local dist = (part.Position - root.Position).Magnitude
+                            if dist < 25 then
+                                ReplicatedStorage.Events.FlagEvents.PlaceFlag:FireServer(part, key, true)
+                                localFlags[part] = true
+                            end
+                        end
+                    end
+                end
+            end
+
+            -- Auto Walk Logic
+            if autoWalkActive and not deducedNewBomb then
+                local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                local pCol, pRow = getCurrentPlayerGrid()
+                if root and pCol and pRow then
+                    local openedCount = 0
+                    for col = 1, W do
+                        for row = 1, H do
+                            if grid[col][row].isOpened then
+                                openedCount = openedCount + 1
+                            end
+                        end
+                    end
+
+                    -- Start the game by clicking center
+                    if openedCount == 0 then
+                        local midCol = math.floor(W / 2) + 1
+                        local midRow = math.floor(H / 2) + 1
+                        local targetPart = grid[midCol][midRow].part
+                        if targetPart then
+                            walkTo(targetPart)
+                            task.wait(0.3)
+                        end
+                    else
+                        local key = getSecretKey()
+                        if key then
+                            -- Walk to safe tile
+                            local targetCell = nil
+                            local bestPath = nil
+                            local minPathLen = math.huge
+                            
+                            for _, cell in pairs(safeTiles) do
+                                local path = findPath(pCol, pRow, cell.col, cell.row)
+                                if path and #path < minPathLen then
+                                    minPathLen = #path
+                                    targetCell = cell
+                                    bestPath = path
+                                end
+                            end
+                            
+                            if bestPath and targetCell then
+                                walkPath(bestPath)
+                                -- Wait briefly for the stepped tile to register open
+                                local startWait = os.clock()
+                                while not targetCell.part:FindFirstChild("NumberGui") and os.clock() - startWait < 1.0 and autoWalkActive do
+                                    task.wait(0.05)
+                                end
+                            else
+                                -- Handle stuck states: calculate optimal probability guess
+                                local bestGuessCell = nil
+                                local minProb = math.huge
+                                
+                                for part, P in pairs(borderProbabilities) do
+                                    local x = math.floor(part.Position.X + 0.5)
+                                    local z = math.floor(part.Position.Z + 0.5)
+                                    local col = xToCol[x]
+                                    local row = zToRow[z]
+                                    if col and row then
+                                        local cell = grid[col][row]
+                                        if P < minProb then
+                                            minProb = P
+                                            bestGuessCell = cell
+                                        end
+                                    end
+                                end
+                                
+                                if bestGuessCell then
+                                    local path = findPath(pCol, pRow, bestGuessCell.col, bestGuessCell.row)
+                                    if path then
+                                        walkPath(path)
+                                    else
+                                        walkTo(bestGuessCell.part)
+                                    end
+                                    local startWait = os.clock()
+                                    while not bestGuessCell.part:FindFirstChild("NumberGui") and os.clock() - startWait < 1.0 and autoWalkActive do
+                                        task.wait(0.05)
+                                    end
+                                else
+                                    -- Final fallback: local random guess candidates
+                                    local candidates = getLocalGuessCandidates(pCol, pRow)
+                                    if #candidates > 0 then
+                                        local guessCell = candidates[math.random(1, #candidates)]
+                                        local path = findPath(pCol, pRow, guessCell.col, guessCell.row)
+                                        if path then
+                                            walkPath(path)
+                                        else
+                                            walkTo(guessCell.part)
+                                        end
+                                        local startWait = os.clock()
+                                        while not guessCell.part:FindFirstChild("NumberGui") and os.clock() - startWait < 1.0 and autoWalkActive do
+                                            task.wait(0.05)
+                                        end
+                                    else
+                                        -- No possible steps found
+                                        autoWalkActive = false
+                                        if AutoWalkToggle then AutoWalkToggle:Set(false) end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        else
+            clearESP()
+            task.wait(0.2)
         end
-        task.wait(0.2)
+    end
+end)
+
+-- ============================================
+-- MOBILE-COMPATIBLE FLOAT TOGGLE BUTTON
+-- ============================================
+
+local mobileGui = Instance.new("ScreenGui")
+mobileGui.Name = "MinesweeperMobileToggle"
+mobileGui.ResetOnSpawn = false
+
+local function parentToGui(gui)
+    local success = pcall(function()
+        gui.Parent = game:GetService("CoreGui")
+    end)
+    if not success then
+        gui.Parent = player:WaitForChild("PlayerGui")
     end
 end
+parentToGui(mobileGui)
+
+local mainButton = Instance.new("TextButton")
+mainButton.Name = "ToggleButton"
+mainButton.Size = UDim2.new(0, 55, 0, 55)
+mainButton.Position = UDim2.new(0.05, 0, 0.25, 0)
+mainButton.BackgroundColor3 = Color3.fromRGB(24, 24, 37)
+mainButton.Text = "Menu"
+mainButton.TextColor3 = Color3.fromRGB(205, 214, 244)
+mainButton.Font = Enum.Font.GothamBold
+mainButton.TextSize = 13
+mainButton.BorderSizePixel = 0
+mainButton.Parent = mobileGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0.5, 0)
+corner.Parent = mainButton
+
+local stroke = Instance.new("UIStroke")
+stroke.Color = Color3.fromRGB(137, 180, 250)
+stroke.Thickness = 2
+stroke.Parent = mainButton
+
+local gradient = Instance.new("UIGradient")
+gradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(30, 30, 46)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(17, 17, 27))
+})
+gradient.Rotation = 45
+gradient.Parent = mainButton
+
+-- Make the floating button draggable
+local dragToggle = nil
+local dragSpeed = 0.15
+local dragStart = nil
+local startPos = nil
+
+local function updateInput(input)
+    local delta = input.Position - dragStart
+    local position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    TweenService:Create(mainButton, TweenInfo.new(dragSpeed), {Position = position}):Play()
+end
+
+mainButton.InputBegan:Connect(function(input)
+    if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+        dragToggle = true
+        dragStart = input.Position
+        startPos = mainButton.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragToggle = false
+            end
+        end)
+    end
+end)
+
+mainButton.InputChanged:Connect(function(input)
+    if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        if dragToggle then
+            updateInput(input)
+        end
+    end
+end)
+
+local function toggleRayfieldVisible()
+    local found = false
+    local robloxGui = game:GetService("CoreGui"):FindFirstChild("RobloxGui")
+    if robloxGui then
+        local rayfield = robloxGui:FindFirstChild("Rayfield")
+        if rayfield and rayfield:IsA("ScreenGui") then
+            rayfield.Enabled = not rayfield.Enabled
+            found = true
+        end
+    end
+    if not found then
+        local targets = {game:GetService("CoreGui"), player:FindFirstChild("PlayerGui")}
+        for _, target in ipairs(targets) do
+            if target then
+                local ray = target:FindFirstChild("Rayfield", true)
+                if ray and ray:IsA("ScreenGui") then
+                    ray.Enabled = not ray.Enabled
+                    found = true
+                    break
+                end
+            end
+        end
+    end
+    return found
+end
+
+mainButton.MouseButton1Click:Connect(function()
+    local originalSize = mainButton.Size
+    TweenService:Create(mainButton, TweenInfo.new(0.08), {Size = UDim2.new(0, 48, 0, 48)}):Play()
+    task.wait(0.08)
+    TweenService:Create(mainButton, TweenInfo.new(0.08), {Size = originalSize}):Play()
+    toggleRayfieldVisible()
+end)
 
 -- ============================================
--- MOBILE-COMPATIBLE FLY MODE
+-- MOBILE-COMPATIBLE FLY MODE WITH ON-SCREEN CONTROLS
 -- ============================================
 
---[[
-    Fly mode now supports both:
-    - Desktop: WASD + Space/Shift with camera-relative vectors
-    - Mobile: Virtual joystick via Humanoid.MoveDirection
+local upButton = Instance.new("TextButton")
+local downButton = Instance.new("TextButton")
+local flyControlsActive = false
+local verticalInput = 0 -- -1 for down, 1 for up, 0 for hover/none
+
+local function createFlyControls()
+    if flyControlsActive then return end
+    flyControlsActive = true
     
-    Humanoid.MoveDirection is automatically populated by Roblox
-    when the player uses the mobile thumbstick.
-]]
+    upButton.Name = "FlyUp"
+    upButton.Size = UDim2.new(0, 50, 0, 50)
+    upButton.Position = UDim2.new(0.85, 0, 0.5, -60)
+    upButton.BackgroundColor3 = Color3.fromRGB(30, 30, 46)
+    upButton.Text = "▲"
+    upButton.TextColor3 = Color3.fromRGB(205, 214, 244)
+    upButton.Font = Enum.Font.GothamBold
+    upButton.TextSize = 20
+    upButton.BorderSizePixel = 0
+    upButton.Parent = mobileGui
+    
+    local c1 = Instance.new("UICorner")
+    c1.CornerRadius = UDim.new(0.3, 0)
+    c1.Parent = upButton
+    
+    local s1 = Instance.new("UIStroke")
+    s1.Color = Color3.fromRGB(137, 220, 143)
+    s1.Thickness = 1.5
+    s1.Parent = upButton
+
+    downButton.Name = "FlyDown"
+    downButton.Size = UDim2.new(0, 50, 0, 50)
+    downButton.Position = UDim2.new(0.85, 0, 0.5, 10)
+    downButton.BackgroundColor3 = Color3.fromRGB(30, 30, 46)
+    downButton.Text = "▼"
+    downButton.TextColor3 = Color3.fromRGB(205, 214, 244)
+    downButton.Font = Enum.Font.GothamBold
+    downButton.TextSize = 20
+    downButton.BorderSizePixel = 0
+    downButton.Parent = mobileGui
+    
+    local c2 = Instance.new("UICorner")
+    c2.CornerRadius = UDim.new(0.3, 0)
+    c2.Parent = downButton
+    
+    local s2 = Instance.new("UIStroke")
+    s2.Color = Color3.fromRGB(243, 139, 168)
+    s2.Thickness = 1.5
+    s2.Parent = downButton
+    
+    upButton.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            verticalInput = 1
+            upButton.BackgroundColor3 = Color3.fromRGB(137, 220, 143)
+            upButton.TextColor3 = Color3.fromRGB(17, 17, 27)
+        end
+    end)
+    
+    upButton.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            if verticalInput == 1 then verticalInput = 0 end
+            upButton.BackgroundColor3 = Color3.fromRGB(30, 30, 46)
+            upButton.TextColor3 = Color3.fromRGB(205, 214, 244)
+        end
+    end)
+
+    downButton.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            verticalInput = -1
+            downButton.BackgroundColor3 = Color3.fromRGB(243, 139, 168)
+            downButton.TextColor3 = Color3.fromRGB(17, 17, 27)
+        end
+    end)
+    
+    downButton.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            if verticalInput == -1 then verticalInput = 0 end
+            downButton.BackgroundColor3 = Color3.fromRGB(30, 30, 46)
+            downButton.TextColor3 = Color3.fromRGB(205, 214, 244)
+        end
+    end)
+end
+
+local function destroyFlyControls()
+    if not flyControlsActive then return end
+    flyControlsActive = false
+    upButton.Parent = nil
+    downButton.Parent = nil
+    verticalInput = 0
+end
 
 local function startFlying()
     local char = player.Character
@@ -1236,19 +1353,20 @@ local function startFlying()
     
     hum.PlatformStand = true
     
+    -- Spawn floating vertical buttons for touch compatibility
+    createFlyControls()
+    
     task.spawn(function()
         while flying and player.Character and root and hum do
             local camera = workspace.CurrentCamera
             local moveDir = Vector3.new(0, 0, 0)
             
-            -- PRIORITY 1: Mobile joystick input (Humanoid.MoveDirection)
-            -- This is automatically set by Roblox when using touch thumbstick
+            -- Mobile virtual thumbstick direction
             local joystickDir = hum.MoveDirection
             if joystickDir.Magnitude > 0.1 then
-                -- Mobile joystick is active, use camera-relative direction
-                moveDir = camera.CFrame:VectorToWorldSpace(joystickDir)
+                moveDir = joystickDir
             else
-                -- PRIORITY 2: Desktop keyboard fallback
+                -- Keyboard fallback
                 if UserInputService:IsKeyDown(Enum.KeyCode.W) then
                     moveDir = moveDir + camera.CFrame.LookVector
                 end
@@ -1263,19 +1381,29 @@ local function startFlying()
                 end
             end
             
-            -- Vertical input (works on both mobile and desktop)
-            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-                moveDir = moveDir + Vector3.new(0, 1, 0)
-            end
-            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
-                moveDir = moveDir - Vector3.new(0, 1, 0)
+            -- Constrain movement to XZ plane relative to the camera face
+            moveDir = Vector3.new(moveDir.X, 0, moveDir.Z)
+            if moveDir.Magnitude > 0 then
+                moveDir = moveDir.Unit
             end
             
-            -- Apply velocity
-            if moveDir.Magnitude > 0 then
-                flyVelocity.velocity = moveDir.Unit * flySpeed
+            -- Ascend / Descend controls (from physical keys or touch overlay buttons)
+            local currentVertical = verticalInput
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                currentVertical = 1
+            elseif UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+                currentVertical = -1
+            end
+            
+            local targetVelocity = moveDir * flySpeed
+            if currentVertical ~= 0 then
+                targetVelocity = targetVelocity + Vector3.new(0, currentVertical * flySpeed, 0)
+            end
+            
+            if targetVelocity.Magnitude > 0 then
+                flyVelocity.velocity = targetVelocity
             else
-                flyVelocity.velocity = Vector3.new(0, 0.1, 0) -- Hover
+                flyVelocity.velocity = Vector3.new(0, 0.1, 0)
             end
             
             flyGyro.cframe = camera.CFrame
@@ -1285,6 +1413,7 @@ local function startFlying()
         if flyGyro then flyGyro:Destroy(); flyGyro = nil end
         if flyVelocity then flyVelocity:Destroy(); flyVelocity = nil end
         if hum then hum.PlatformStand = false end
+        destroyFlyControls()
     end)
 end
 
@@ -1294,11 +1423,16 @@ local function stopFlying()
     local char = player.Character
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     if hum then hum.PlatformStand = false end
+    destroyFlyControls()
 end
 
 local function toggleFly(val)
     flying = val
     if flying then
+        if autoWalkActive then
+            autoWalkActive = false
+            if AutoWalkToggle then AutoWalkToggle:Set(false) end
+        end
         startFlying()
         notify("Fly Mode", "Flying ON")
     else
@@ -1383,7 +1517,7 @@ local HomeTab = Window:CreateTab("Home", "home")
 
 HomeTab:CreateParagraph({
     Title = "Minesweeper Solver Suite",
-    Content = "Full Solver Bot & ESP edition using Rayfield UI. Press RightShift to hide the UI menu. Mobile joystick supported for fly mode!"
+    Content = "Full Solver Bot & ESP edition using Rayfield UI. Press RightShift or tap the floating 'Menu' button to toggle UI visibility. Mobile thumbstick fully supported!"
 })
 
 HomeTab:CreateButton({
@@ -1421,6 +1555,10 @@ local function killUI()
     if espFolder then
         espFolder:Destroy()
     end
+
+    if mobileGui then
+        mobileGui:Destroy()
+    end
     
     Rayfield:Destroy()
 end
@@ -1436,9 +1574,13 @@ local BotTab = Window:CreateTab("Auto Bot", "bot")
 local function setAutoWalk(val)
     autoWalkActive = val
     if autoWalkActive then
+        if flying then
+            flying = false
+            stopFlying()
+            if FlyToggle then FlyToggle:Set(false) end
+        end
         initGrid()
         notify("Auto Walk", "Auto Walk toggled ON")
-        task.spawn(autoWalkLoop)
     else
         notify("Auto Walk", "Auto Walk toggled OFF")
     end
@@ -1449,7 +1591,6 @@ local function setAutoFlag(val)
     if autoFlagActive then
         initGrid()
         notify("Auto Flag", "Auto Flag toggled ON")
-        task.spawn(autoFlagLoop)
     else
         notify("Auto Flag", "Auto Flag toggled OFF")
     end
@@ -1500,7 +1641,6 @@ ESPToggle = EspTab:CreateToggle({
         espActive = val
         if espActive then
             initGrid()
-            task.spawn(espLoop)
             notify("ESP Toggled", "ESP is now ACTIVE")
         else
             clearESP()
