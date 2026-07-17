@@ -1,3 +1,4 @@
+
 -- Minesweeper Solver Bot & ESP (Rayfield UI Full Suite)
 -- Mobile Compatible Edition with Dynamic Key Verification
 -- Keysystem Key: Dynamic fetch from GitHub, fallback "JawirOnTop"
@@ -22,6 +23,17 @@ local infiniteJump = false
 local flying = false
 local flySpeed = 50
 local flyGyro, flyVelocity
+
+-- Auto flag customization variables
+local autoFlagDelayMs = 100
+local autoFlagDelay = 0.1
+local autoFlagDistance = 25
+local lastFlagTime = 0
+
+-- ESP customization variables
+local espRefreshInterval = 0.5
+local lastEspUpdateTime = 0
+local espCleared = true
 
 -- ESP Color configuration
 local espSafeColor = Color3.fromRGB(0, 0, 255)
@@ -75,7 +87,7 @@ local function fetchDynamicKey()
     end
     
     print("[KeySystem] Failed to fetch dynamic key, using static fallback: " .. STATIC_BACKUP_KEY)
-    return STATIC_BACKBEK_KEY
+    return STATIC_BACKUP_KEY
 end
 
 -- Fetch key on load
@@ -278,11 +290,19 @@ local function hasServerFlag(part)
 end
 
 local function checkFlagged(part)
-    return localFlags[part] == true or deducedBombs[part] == true
+    if hasServerFlag(part) then
+        localFlags[part] = nil
+        return true
+    end
+    local localTime = localFlags[part]
+    if localTime and (os.clock() - localTime < 1.5) then
+        return true
+    end
+    return false
 end
 
 local function checkBlocked(part)
-    return localFlags[part] == true or deducedBombs[part] == true or hasServerFlag(part)
+    return checkFlagged(part) or deducedBombs[part] == true
 end
 
 -- ============================================
@@ -299,7 +319,7 @@ local function updateESP(safeTiles, borderProbabilities)
     
     -- Deduced bombs
     for part in pairs(deducedBombs) do
-        if part and part.Parent then
+        if part and part.Parent and not part:FindFirstChild("NumberGui") and not hasServerFlag(part) then
             local box = Instance.new("SelectionBox")
             box.Adornee = part
             box.Color3 = espBombColor
@@ -312,7 +332,7 @@ local function updateESP(safeTiles, borderProbabilities)
     
     -- Deduced safe tiles
     for _, cell in pairs(safeTiles) do
-        if cell.part and cell.part.Parent then
+        if cell.part and cell.part.Parent and not cell.part:FindFirstChild("NumberGui") and not hasServerFlag(cell.part) then
             local box = Instance.new("SelectionBox")
             box.Adornee = cell.part
             box.Color3 = espSafeColor
@@ -325,7 +345,7 @@ local function updateESP(safeTiles, borderProbabilities)
     
     -- Yellow/Orange outline + fill + BillboardGui percent text for uncertain tiles
     for part, P in pairs(borderProbabilities) do
-        if part and part.Parent then
+        if part and part.Parent and not part:FindFirstChild("NumberGui") and not hasServerFlag(part) then
             local color = espUncertainMed
             if P < 0.35 then
                 color = espUncertainLow
@@ -792,6 +812,20 @@ local function solveEquations(safeTiles, borderProbabilities)
 end
 
 local function updateDeductions()
+    -- Clear opened cells from bomb/flag caches
+    for col = 1, W do
+        for row = 1, H do
+            local cell = grid[col][row]
+            if cell.part then
+                local isOpened = cell.part:FindFirstChild("NumberGui") ~= nil
+                if isOpened then
+                    deducedBombs[cell.part] = nil
+                    localFlags[cell.part] = nil
+                end
+            end
+        end
+    end
+
     -- Double scan for consistency
     local state1 = scanBoard()
     task.wait(0.05)
@@ -883,10 +917,10 @@ local function updateDeductions()
                     for dc = -1, 1 do
                         for dr = -1, 1 do
                             if not (dc == 0 and dr == 0) then
-                                local nc = col + dc
-                                local nr = row + dr
-                                if nc >= 1 and nc <= W and nr >= 1 and nr <= H then
-                                    local nCell = grid[nc][nr]
+                                import_nc = col + dc
+                                import_nr = row + dr
+                                if import_nc >= 1 and import_nc <= W and import_nr >= 1 and import_nr <= H then
+                                    local nCell = grid[import_nc][import_nr]
                                     table.insert(neighbors, nCell)
                                     if nCell.isFlagged then
                                         flaggedNeighbors = flaggedNeighbors + 1
@@ -934,31 +968,47 @@ end
 -- MOVEMENT & WALKING
 -- ============================================
 
-local function walkTo(part)
+local function walkTo(part, isFinalTarget)
     local char = player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     if not root or not hum then return end
     
     hum.WalkSpeed = customWalkSpeed
-    
     local targetPos = Vector3.new(part.Position.X, root.Position.Y, part.Position.Z)
+    
     hum:MoveTo(targetPos)
     
     local startT = os.clock()
-    while (root.Position - targetPos).Magnitude > 1.0 and autoWalkActive do
-        if os.clock() - startT > 3 then
+    local targetDist = isFinalTarget and 1.2 or 3.5
+    
+    -- Loop to wait until close enough, updating MoveTo only occasionally to prevent robotic stuttering
+    local lastMoveToUpdate = os.clock()
+    while autoWalkActive do
+        if not root or not root.Parent then break end
+        local dist = (root.Position - targetPos).Magnitude
+        if dist <= targetDist then
             break
         end
-        task.wait()
-        hum:MoveTo(targetPos)
+        if os.clock() - startT > 2.5 then -- Timeout fallback
+            break
+        end
+        
+        -- Refresh MoveTo occasionally (e.g. every 0.3s) just in case character got blocked
+        if os.clock() - lastMoveToUpdate >= 0.3 then
+            hum:MoveTo(targetPos)
+            lastMoveToUpdate = os.clock()
+        end
+        task.wait(0.02)
     end
 end
 
 local function walkPath(path)
-    for _, part in ipairs(path) do
+    local len = #path
+    for i, part in ipairs(path) do
         if not autoWalkActive then break end
-        walkTo(part)
+        local isFinalTarget = (i == len)
+        walkTo(part, isFinalTarget)
     end
 end
 
@@ -969,7 +1019,7 @@ end
 -- Unified task manager to eliminate race conditions between auto flag, auto walk, and ESP
 task.spawn(function()
     while true do
-        task.wait(0.05)
+        task.wait(0.02)
         
         -- Keep grid mapped and synchronized if any active feature is enabled
         if autoWalkActive or autoFlagActive or espActive then
@@ -989,125 +1039,139 @@ task.spawn(function()
                 continue
             end
 
-            -- Update tile state and perform deductions
-            local success, safeTiles, borderProbabilities, deducedNewBomb = updateDeductions()
-            if not success then
-                continue
-            end
-
-            -- Auto Flag Logic
-            if autoFlagActive then
-                local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                local key = getSecretKey()
-                if root and key then
-                    for part in pairs(deducedBombs) do
-                        if not hasServerFlag(part) then
-                            local dist = (part.Position - root.Position).Magnitude
-                            if dist < 25 then
-                                ReplicatedStorage.Events.FlagEvents.PlaceFlag:FireServer(part, key, true)
-                                localFlags[part] = true
-                            end
-                        end
-                    end
+            -- Only calculate deductions if autoWalkActive/autoFlagActive are on, or ESP is active and enough time has elapsed
+            local shouldUpdate = autoWalkActive or autoFlagActive or (espActive and (os.clock() - lastEspUpdateTime >= espRefreshInterval))
+            
+            if shouldUpdate then
+                if espActive then
+                    lastEspUpdateTime = os.clock() -- Update immediately to prevent tight-loop scanning on calculation errors
+                    espCleared = false
                 end
-            end
+                local success, safeTiles, borderProbabilities, deducedNewBomb = updateDeductions()
+                if success then
 
-            -- Auto Walk Logic
-            if autoWalkActive and not deducedNewBomb then
-                local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                local pCol, pRow = getCurrentPlayerGrid()
-                if root and pCol and pRow then
-                    local openedCount = 0
-                    for col = 1, W do
-                        for row = 1, H do
-                            if grid[col][row].isOpened then
-                                openedCount = openedCount + 1
-                            end
-                        end
-                    end
-
-                    -- Start the game by clicking center
-                    if openedCount == 0 then
-                        local midCol = math.floor(W / 2) + 1
-                        local midRow = math.floor(H / 2) + 1
-                        local targetPart = grid[midCol][midRow].part
-                        if targetPart then
-                            walkTo(targetPart)
-                            task.wait(0.3)
-                        end
-                    else
+                    -- Auto Flag Logic
+                    if autoFlagActive then
+                        local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
                         local key = getSecretKey()
-                        if key then
-                            -- Walk to safe tile
-                            local targetCell = nil
-                            local bestPath = nil
-                            local minPathLen = math.huge
-                            
-                            for _, cell in pairs(safeTiles) do
-                                local path = findPath(pCol, pRow, cell.col, cell.row)
-                                if path and #path < minPathLen then
-                                    minPathLen = #path
-                                    targetCell = cell
-                                    bestPath = path
+                        if root and key then
+                            for part in pairs(deducedBombs) do
+                                if not checkFlagged(part) then
+                                    local dist = (part.Position - root.Position).Magnitude
+                                    if dist < autoFlagDistance then
+                                        if autoFlagDelay == 0 then
+                                            ReplicatedStorage.Events.FlagEvents.PlaceFlag:FireServer(part, key, true)
+                                            localFlags[part] = os.clock()
+                                        elseif os.clock() - lastFlagTime >= autoFlagDelay then
+                                            ReplicatedStorage.Events.FlagEvents.PlaceFlag:FireServer(part, key, true)
+                                            localFlags[part] = os.clock()
+                                            lastFlagTime = os.clock()
+                                            break
+                                        end
+                                    end
                                 end
                             end
-                            
-                            if bestPath and targetCell then
-                                walkPath(bestPath)
-                                -- Wait briefly for the stepped tile to register open
-                                local startWait = os.clock()
-                                while not targetCell.part:FindFirstChild("NumberGui") and os.clock() - startWait < 1.0 and autoWalkActive do
-                                    task.wait(0.05)
+                        end
+                    end
+
+                    -- Auto Walk Logic
+                    if autoWalkActive and not deducedNewBomb then
+                        local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                        local pCol, pRow = getCurrentPlayerGrid()
+                        if root and pCol and pRow then
+                            local openedCount = 0
+                            for col = 1, W do
+                                for row = 1, H do
+                                    if grid[col][row].isOpened then
+                                        openedCount = openedCount + 1
+                                    end
+                                end
+                            end
+
+                            -- Start the game by clicking center
+                            if openedCount == 0 then
+                                local midCol = math.floor(W / 2) + 1
+                                local midRow = math.floor(H / 2) + 1
+                                local targetPart = grid[midCol][midRow].part
+                                if targetPart then
+                                    walkTo(targetPart, true)
+                                    task.wait(0.3)
                                 end
                             else
-                                -- Handle stuck states: calculate optimal probability guess
-                                local bestGuessCell = nil
-                                local minProb = math.huge
-                                
-                                for part, P in pairs(borderProbabilities) do
-                                    local x = math.floor(part.Position.X + 0.5)
-                                    local z = math.floor(part.Position.Z + 0.5)
-                                    local col = xToCol[x]
-                                    local row = zToRow[z]
-                                    if col and row then
-                                        local cell = grid[col][row]
-                                        if P < minProb then
-                                            minProb = P
-                                            bestGuessCell = cell
+                                local key = getSecretKey()
+                                if key then
+                                    -- Walk to safe tile
+                                    local targetCell = nil
+                                    local bestPath = nil
+                                    local minPathLen = math.huge
+                                    
+                                    for _, cell in pairs(safeTiles) do
+                                        local path = findPath(pCol, pRow, cell.col, cell.row)
+                                        if path and #path < minPathLen then
+                                            minPathLen = #path
+                                            targetCell = cell
+                                            bestPath = path
                                         end
                                     end
-                                end
-                                
-                                if bestGuessCell then
-                                    local path = findPath(pCol, pRow, bestGuessCell.col, bestGuessCell.row)
-                                    if path then
-                                        walkPath(path)
-                                    else
-                                        walkTo(bestGuessCell.part)
-                                    end
-                                    local startWait = os.clock()
-                                    while not bestGuessCell.part:FindFirstChild("NumberGui") and os.clock() - startWait < 1.0 and autoWalkActive do
-                                        task.wait(0.05)
-                                    end
-                                else
-                                    -- Final fallback: local random guess candidates
-                                    local candidates = getLocalGuessCandidates(pCol, pRow)
-                                    if #candidates > 0 then
-                                        local guessCell = candidates[math.random(1, #candidates)]
-                                        local path = findPath(pCol, pRow, guessCell.col, guessCell.row)
-                                        if path then
-                                            walkPath(path)
-                                        else
-                                            walkTo(guessCell.part)
-                                        end
+                                    
+                                    if bestPath and targetCell then
+                                        walkPath(bestPath)
+                                        -- Wait briefly for the stepped tile to register open
                                         local startWait = os.clock()
-                                        while not guessCell.part:FindFirstChild("NumberGui") and os.clock() - startWait < 1.0 and autoWalkActive do
+                                        while not targetCell.part:FindFirstChild("NumberGui") and os.clock() - startWait < 1.0 and autoWalkActive do
                                             task.wait(0.05)
                                         end
                                     else
-                                        -- No possible steps found
-                                        autoWalkActive = false
-                                        if AutoWalkToggle then AutoWalkToggle:Set(false) end
+                                        -- Handle stuck states: calculate optimal probability guess
+                                        local bestGuessCell = nil
+                                        local minProb = math.huge
+                                        
+                                        for part, P in pairs(borderProbabilities) do
+                                            local x = math.floor(part.Position.X + 0.5)
+                                            local z = math.floor(part.Position.Z + 0.5)
+                                            local col = xToCol[x]
+                                            local row = zToRow[z]
+                                            if col and row then
+                                                local cell = grid[col][row]
+                                                if P < minProb then
+                                                    minProb = P
+                                                    bestGuessCell = cell
+                                                end
+                                            end
+                                        end
+                                        
+                                        if bestGuessCell then
+                                            local path = findPath(pCol, pRow, bestGuessCell.col, bestGuessCell.row)
+                                            if path then
+                                                walkPath(path)
+                                            else
+                                                walkTo(bestGuessCell.part, true)
+                                            end
+                                            local startWait = os.clock()
+                                            while not bestGuessCell.part:FindFirstChild("NumberGui") and os.clock() - startWait < 1.0 and autoWalkActive do
+                                                task.wait(0.05)
+                                            end
+                                        else
+                                            -- Final fallback: local random guess candidates
+                                            local candidates = getLocalGuessCandidates(pCol, pRow)
+                                            if #candidates > 0 then
+                                                local guessCell = candidates[math.random(1, #candidates)]
+                                                local path = findPath(pCol, pRow, guessCell.col, guessCell.row)
+                                                if path then
+                                                    walkPath(path)
+                                                else
+                                                    walkTo(guessCell.part, true)
+                                                end
+                                                local startWait = os.clock()
+                                                while not guessCell.part:FindFirstChild("NumberGui") and os.clock() - startWait < 1.0 and autoWalkActive do
+                                                    task.wait(0.05)
+                                                end
+                                            else
+                                                -- No possible steps found
+                                                autoWalkActive = false
+                                                if AutoWalkToggle then AutoWalkToggle:Set(false) end
+                                            end
+                                        end
                                     end
                                 end
                             end
@@ -1116,8 +1180,11 @@ task.spawn(function()
                 end
             end
         else
-            clearESP()
-            task.wait(0.2)
+            if not espCleared then
+                clearESP()
+                espCleared = true
+            end
+            task.wait(0.25)
         end
     end
 end)
@@ -1630,6 +1697,31 @@ BotTab:CreateKeybind({
     end
 })
 
+BotTab:CreateSection("Auto Flag Customization")
+
+BotTab:CreateSlider({
+    Name = "Flag Delay (Milliseconds)",
+    Range = {0, 2000},
+    Increment = 50,
+    CurrentValue = autoFlagDelayMs,
+    Flag = "FlagDelayMsVal",
+    Callback = function(val)
+        autoFlagDelayMs = val
+        autoFlagDelay = val / 1000
+    end
+})
+
+BotTab:CreateSlider({
+    Name = "Flag Distance (Studs) [Server Cap: 30]",
+    Range = {5, 30},
+    Increment = 1,
+    CurrentValue = autoFlagDistance,
+    Flag = "FlagDistanceStudsVal",
+    Callback = function(val)
+        autoFlagDistance = val
+    end
+})
+
 -- Tab 3: ESP
 local EspTab = Window:CreateTab("ESP", "eye")
 
@@ -1656,6 +1748,19 @@ EspTab:CreateKeybind({
     Flag = "ESPKeybind",
     Callback = function()
         ESPToggle:Set(not espActive)
+    end
+})
+
+EspTab:CreateSection("ESP Customization")
+
+EspTab:CreateSlider({
+    Name = "ESP Refresh Interval (Seconds)",
+    Range = {0.1, 3},
+    Increment = 0.1,
+    CurrentValue = espRefreshInterval,
+    Flag = "EspRefreshSecondsVal",
+    Callback = function(val)
+        espRefreshInterval = val
     end
 })
 
