@@ -612,3 +612,22 @@ UserInputService.InputBegan:Connect(function(input, gpe)
         end
     end
 end)
+
+local isOpen = true
+
+UIS.InputBegan:Connect(function(input, isTyping)
+    if isTyping then return end
+    
+    -- Change "K" to whatever key you prefer
+    if input.KeyCode == Enum.KeyCode.K then
+        if isOpen then
+            -- This hides the Orion interface
+            OrionLib:Toggle() 
+            isOpen = false
+        else
+            -- This shows it again
+            OrionLib:Toggle() 
+            isOpen = true
+        end
+    end
+end)
