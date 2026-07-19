@@ -61,7 +61,7 @@ end
 
 -- Load Orion UI Library
 local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/jensonhirst/Orion/main/source')))()
-local Window = OrionLib:MakeWindow({Name = "Scripts", HidePremium = true, SaveConfig = false, IntroText = "Loading", ToggleKeyInfo = Enum.KeyCode.RightShift})
+local Window = OrionLib:MakeWindow({Name = "Scripts", HidePremium = true, SaveConfig = false, IntroText = "Loading", ToggleKeyInfo = Enum.KeyCode.K})
 
 -- Global Config States (Optimal safe combat defaults)
 local ReachEnabled = false
