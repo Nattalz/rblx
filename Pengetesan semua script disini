@@ -1,16 +1,21 @@
+--[[
+    Antigravity Boxing Exploit & AC Bypass
+    GUI Library: Orion UI Library
+    Bypasses: PVEye Anti-Cheat, WWE Advanced Anti-Cheat, OPRW Custom AC
+--]]
+
+-- Safe Instance-based destruction (No hooks to bypass Adonis)
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local StarterGui = game:GetService("StarterGui")
 
 local function clearCustomAC()
-    -- Game 1: PVEye Custom AC
     local Tracker = PlayerGui:FindFirstChild("Tracker")
     local Loop = PlayerGui:FindFirstChild("Loop")
     if Tracker then Tracker:Destroy() end
     if Loop then Loop:Destroy() end
 
-    -- Game 2: OPRW Custom AC
     local anti = PlayerGui:FindFirstChild("anti")
     if anti then anti:Destroy() end
     
@@ -18,10 +23,8 @@ local function clearCustomAC()
     if starterAnti then starterAnti:Destroy() end
 end
 
--- Clear immediately on execute
 clearCustomAC()
 
--- Clear on regeneration/spawn
 PlayerGui.ChildAdded:Connect(function(child)
     if child.Name == "Tracker" or child.Name == "Loop" or child.Name == "anti" then
         task.spawn(function()
@@ -35,7 +38,6 @@ PlayerGui.ChildAdded:Connect(function(child)
     end
 end)
 
--- Clear WWE/Rumble Tool AC Scripts when tools are added
 local function handleToolAC(tool)
     if tool:IsA("Tool") then
         if tool.Name == "WWE Clean" then
@@ -57,13 +59,11 @@ if LocalPlayer.Character then
     end
 end
 
+-- Load Orion UI Library
+local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/jensonhirst/Orion/main/source')))()
+local Window = OrionLib:MakeWindow({Name = "Scripts", HidePremium = true, SaveConfig = false, IntroText = "Loading", ToggleKeyInfo = Enum.KeyCode.RightShift})
 
-
-
--- Load Rayfield UI Library
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-
--- Global Variables / Configurations
+-- Global Config States (Optimal safe combat defaults)
 local ReachEnabled = false
 local ReachDistance = 15
 local ReachType = "Sphere"
@@ -74,243 +74,201 @@ local VisualizerColor = Color3.fromRGB(0, 170, 255)
 local VisualizerTransparency = 0.5
 
 local AutoClickerEnabled = false
-local AutoClickerDelay = 0.1
+local AutoClickerDelay = 0.15
 
-local AimbotEnabled = false
+local AimbotEnabled = true
 local AimbotActive = false
-local AimbotPart = "Head"
+local AimbotPart = "HumanoidRootPart"
 local AimbotTargetMode = "Distance"
-local AimbotMode = "Hold" -- "Hold" or "Toggle"
-local AimbotSmoothness = 0.2
-local AimbotFOV = 150
-local AimbotKeybind = Enum.KeyCode.E
+local AimbotMode = "Hold"
+local AimbotSmoothness = 0.35
+local AimbotFOV = 120
+local AimbotKey = Enum.KeyCode.E
+local AimbotMouse = nil
 
 local TankModeEnabled = false
-
 local UIKey = Enum.KeyCode.RightShift
 
--- Services
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local LocalPlayer = Players.LocalPlayer
+local cbringActiveParts = {}
+local currentAimbotTarget = nil
 
--- Initialize Main Window
-local Window = Rayfield:CreateWindow({
-    Name = "Untitled OPRW // Private Training",
-    LoadingTitle = "Untitled OPRW // Private Training",
-    LoadingSubtitle = "by mousey",
-    Theme = "DarkBlue",
-    DisableRayfieldPrompts = false,
-    DisableBuildWarnings = false,
-    ConfigurationSaving = {
-        Enabled = true,
-        FolderName = "Folders",
-        FileName = "BoxingConfig"
-    },
-    KeySystem = false
-})
+-- Create Orion Tabs
+local TabReach = Window:MakeTab({Name = "Reach", Icon = "rbxassetid://4483362458", PremiumOnly = false})
+local TabCombat = Window:MakeTab({Name = "Combat", Icon = "rbxassetid://4483362458", PremiumOnly = false})
+local TabTank = Window:MakeTab({Name = "Tank & AC", Icon = "rbxassetid://4483362458", PremiumOnly = false})
+--local TabSettings = Window:MakeTab({Name = "Settings", Icon = "rbxassetid://4483362458", PremiumOnly = false})
 
--- Create Tabs
-local TabReach = Window:CreateTab("Reach", 4483362458)
-local TabCombat = Window:CreateTab("Combat", 4483362458)
-local TabTank = Window:CreateTab("Tank & AC", 4483362458)
-local TabSettings = Window:CreateTab("Settings", 4483362458)
-
--- Tab 1: Reach Settings
-TabReach:CreateSection("Reach Controls")
-
-TabReach:CreateToggle({
+-- 1. Reach Tab Elements
+TabReach:AddToggle({
     Name = "Enable Reach",
-    CurrentValue = false,
-    Flag = "ReachToggle",
-    Callback = function(Value)
-        ReachEnabled = Value
+    Default = false,
+    Callback = function(state)
+        ReachEnabled = state
     end
 })
 
-TabReach:CreateSlider({
+TabReach:AddSlider({
     Name = "Reach Distance",
-    Range = {1, 50},
-    Increment = 1,
-    Suffix = " Studs",
-    CurrentValue = 15,
-    Flag = "ReachDistSlider",
-    Callback = function(Value)
-        ReachDistance = Value
-    end
-})
-
-TabReach:CreateDropdown({
-    Name = "Reach Shape",
-    Options = {"Sphere", "Line"},
-    CurrentOption = {"Sphere"},
-    MultipleOptions = false,
-    Flag = "ReachShapeDropdown",
-    Callback = function(Option)
-        ReachType = Option[1]
-    end
-})
-
-TabReach:CreateToggle({
-    Name = "Use CBring (Client Bring Parts)",
-    CurrentValue = false,
-    Flag = "CBringToggle",
-    Callback = function(Value)
-        UseCBring = Value
-    end
-})
-
-TabReach:CreateToggle({
-    Name = "Use FTI (Fast TouchInterest)",
-    CurrentValue = false,
-    Flag = "FTIToggle",
-    Callback = function(Value)
-        UseFTI = Value
-    end
-})
-
-TabReach:CreateSection("Visualizer")
-
-TabReach:CreateToggle({
-    Name = "Enable Visualizer",
-    CurrentValue = false,
-    Flag = "VisualizerToggle",
-    Callback = function(Value)
-        VisualizerEnabled = Value
-    end
-})
-
-TabReach:CreateColorPicker({
-    Name = "Visualizer Color",
+    Min = 1,
+    Max = 50,
+    Default = 15,
     Color = Color3.fromRGB(0, 170, 255),
-    Flag = "VisualizerColorPicker",
-    Callback = function(Value)
-        VisualizerColor = Value
+    Increment = 1,
+    ValueName = "studs",
+    Callback = function(value)
+        ReachDistance = value
     end
 })
 
-TabReach:CreateSlider({
+TabReach:AddDropdown({
+    Name = "Reach Shape",
+    Default = "Sphere",
+    Options = {"Sphere", "Line"},
+    Callback = function(option)
+        ReachType = option
+    end
+})
+
+TabReach:AddToggle({
+    Name = "Use CBring",
+    Default = false,
+    Callback = function(state)
+        UseCBring = state
+    end
+})
+
+TabReach:AddToggle({
+    Name = "Use FTI",
+    Default = false,
+    Callback = function(state)
+        UseFTI = state
+    end
+})
+
+TabReach:AddToggle({
+    Name = "Enable Visualizer",
+    Default = false,
+    Callback = function(state)
+        VisualizerEnabled = state
+    end
+})
+
+TabReach:AddSlider({
     Name = "Visualizer Transparency",
-    Range = {0, 1},
-    Increment = 0.1,
-    Suffix = "",
-    CurrentValue = 0.5,
-    Flag = "VisualizerTransSlider",
-    Callback = function(Value)
-        VisualizerTransparency = Value
+    Min = 0,
+    Max = 10,
+    Default = 5,
+    Color = Color3.fromRGB(255, 255, 255),
+    Increment = 1,
+    ValueName = "",
+    Callback = function(value)
+        VisualizerTransparency = value / 10
     end
 })
 
-
--- Tab 2: Combat Settings (Aimbot & Autoclicker)
-TabCombat:CreateSection("Aimbot Controls")
-
-TabCombat:CreateToggle({
+-- 2. Combat Tab Elements (Aimbot & Auto Clicker)
+TabCombat:AddToggle({
     Name = "Enable Aimbot",
-    CurrentValue = false,
-    Flag = "AimbotToggle",
-    Callback = function(Value)
-        AimbotEnabled = Value
+    Default = true,
+    Callback = function(state)
+        AimbotEnabled = state
     end
 })
 
-TabCombat:CreateDropdown({
+TabCombat:AddDropdown({
     Name = "Aimbot Target Part",
-    Options = {"Head", "HumanoidRootPart"},
-    CurrentOption = {"Head"},
-    MultipleOptions = false,
-    Flag = "AimbotPartDropdown",
-    Callback = function(Option)
-        AimbotPart = Option[1]
+    Default = "HumanoidRootPart",
+    Options = {"HumanoidRootPart", "Head"},
+    Callback = function(option)
+        AimbotPart = option
     end
 })
 
-TabCombat:CreateDropdown({
+TabCombat:AddDropdown({
     Name = "Aimbot Target Mode",
+    Default = "Distance",
     Options = {"Distance", "Mouse"},
-    CurrentOption = {"Distance"},
-    MultipleOptions = false,
-    Flag = "AimbotModeDropdown",
-    Callback = function(Option)
-        AimbotTargetMode = Option[1]
+    Callback = function(option)
+        AimbotTargetMode = option
     end
 })
 
-TabCombat:CreateDropdown({
+TabCombat:AddDropdown({
     Name = "Aimbot Trigger Mode",
+    Default = "Hold",
     Options = {"Hold", "Toggle"},
-    CurrentOption = {"Hold"},
-    MultipleOptions = false,
-    Flag = "AimbotTriggerDropdown",
-    Callback = function(Option)
-        AimbotMode = Option[1]
+    Callback = function(option)
+        AimbotMode = option
         AimbotActive = false
+        currentAimbotTarget = nil
     end
 })
 
-TabCombat:CreateSlider({
+TabCombat:AddSlider({
     Name = "Aimbot Smoothness",
-    Range = {0.1, 1},
-    Increment = 0.05,
-    Suffix = "",
-    CurrentValue = 0.2,
-    Flag = "AimbotSmoothSlider",
-    Callback = function(Value)
-        AimbotSmoothness = Value
+    Min = 10,
+    Max = 100,
+    Default = 35,
+    Color = Color3.fromRGB(255, 255, 255),
+    Increment = 5,
+    ValueName = "%",
+    Callback = function(value)
+        AimbotSmoothness = value / 100
     end
 })
 
-TabCombat:CreateSlider({
-    Name = "Aimbot Mouse FOV",
-    Range = {30, 500},
+TabCombat:AddSlider({
+    Name = "Mouse FOV Limit",
+    Min = 30,
+    Max = 500,
+    Default = 120,
+    Color = Color3.fromRGB(255, 255, 255),
     Increment = 10,
-    Suffix = " px",
-    CurrentValue = 150,
-    Flag = "AimbotFOVSlider",
-    Callback = function(Value)
-        AimbotFOV = Value
+    ValueName = "px",
+    Callback = function(value)
+        AimbotFOV = value
     end
 })
 
-TabCombat:CreateKeybind({
-    Name = "Aimbot Activation Key",
-    CurrentKeybind = "E",
-    HoldToInteract = false,
-    Flag = "AimbotBind",
-    Callback = function(Keybind)
-        AimbotKeybind = Keybind
+TabCombat:AddDropdown({
+    Name = "Activation Keybind",
+    Default = "E",
+    Options = {"E", "Q", "MouseButton2", "LeftShift", "C"},
+    Callback = function(option)
         AimbotActive = false
+        currentAimbotTarget = nil
+        if option == "MouseButton2" then
+            AimbotMouse = Enum.UserInputType.MouseButton2
+            AimbotKey = nil
+        else
+            AimbotKey = Enum.KeyCode[option]
+            AimbotMouse = nil
+        end
     end
 })
 
-TabCombat:CreateSection("Auto Clicker")
-
-TabCombat:CreateToggle({
+TabCombat:AddToggle({
     Name = "Enable Auto Clicker",
-    CurrentValue = false,
-    Flag = "ACToggle",
-    Callback = function(Value)
-        AutoClickerEnabled = Value
+    Default = false,
+    Callback = function(state)
+        AutoClickerEnabled = state
     end
 })
 
-TabCombat:CreateSlider({
-    Name = "Click Delay",
-    Range = {0.01, 1},
-    Increment = 0.01,
-    Suffix = " sec",
-    CurrentValue = 0.1,
-    Flag = "ACDelaySlider",
-    Callback = function(Value)
-        AutoClickerDelay = Value
+TabCombat:AddSlider({
+    Name = "Click Delay (ms)",
+    Min = 1,
+    Max = 100,
+    Default = 15,
+    Color = Color3.fromRGB(255, 255, 255),
+    Increment = 1,
+    ValueName = "cs",
+    Callback = function(value)
+        AutoClickerDelay = value / 100
     end
 })
 
-
--- Tab 3: Tank Mode & Bypass Status
-TabTank:CreateSection("Tank Mode")
-
+-- 3. Tank Tab Elements
 local function updateTankMode()
     local myChar = LocalPlayer.Character
     if not myChar then return end
@@ -321,36 +279,33 @@ local function updateTankMode()
     end
 end
 
-TabTank:CreateToggle({
-    Name = "Enable Tank Mode (CanTouch Bypass)",
-    CurrentValue = false,
-    Flag = "TankToggle",
-    Callback = function(Value)
-        TankModeEnabled = Value
+TabTank:AddToggle({
+    Name = "Enable Tank Mode",
+    Default = false,
+    Callback = function(state)
+        TankModeEnabled = state
         updateTankMode()
     end
 })
 
-TabTank:CreateSection("Anti-Cheat Bypass Status")
-TabTank:CreateParagraph({Title = "PVEye Bypass", Content = "Active (Instance-Based Tracker & Loop Autodestroy)"})
-TabTank:CreateParagraph({Title = "WWE Tool Bypass", Content = "Active (Tool LocalScript Autodestroy)"})
+TabTank:AddLabel("PVEye Bypass: Active (Autodestroyed)")
+TabTank:AddLabel("WWE Tool Bypass: Active (Autodestroyed)")
+TabTank:AddLabel("OPRW Bypass: Active (Autodestroyed)")
 
+-- 4. Settings Tab Elements
+-- TabSettings:AddDropdown({
+--     Name = "Toggle UI Key",
+--     Default = "RightShift",
+--     Options = {"RightShift", "LeftShift", "Insert", "Delete"},
+--     Callback = function(option)
+--         UIKey = Enum.KeyCode[option]
+--     end
+-- })
 
--- Tab 4: Menu Settings
-TabSettings:CreateSection("Menu Keybinds")
+-- Initialize Orion UI
+OrionLib:Init()
 
-TabSettings:CreateKeybind({
-    Name = "Toggle Menu Key",
-    CurrentKeybind = "RightShift",
-    HoldToInteract = false,
-    Flag = "MenuBind",
-    Callback = function(Keybind)
-        UIKey = Keybind
-    end
-})
-
-
--- Reach Helper functions
+-- Helper: Get local character's damaging part
 local function getDamagingPart()
     local myChar = LocalPlayer.Character
     if not myChar then return nil end
@@ -358,13 +313,18 @@ local function getDamagingPart()
     if tool then
         return tool:FindFirstChild("Handle") or tool:FindFirstChildOfClass("BasePart")
     end
-    -- Fallback to character hands/arms for toolless boxing
     return myChar:FindFirstChild("Right Hand") or myChar:FindFirstChild("Right Arm") or
            myChar:FindFirstChild("Left Hand") or myChar:FindFirstChild("Left Arm") or
            myChar:FindFirstChild("HumanoidRootPart")
 end
 
--- Initialize Visualizer Part
+-- Helper: Check if local player is typing in chat
+local function isTyping()
+    local UserInputService = game:GetService("UserInputService")
+    return UserInputService:GetFocusedTextBox() ~= nil
+end
+
+-- Visualizer Setup
 local visualizer = Instance.new("Part")
 visualizer.Material = Enum.Material.ForceField
 visualizer.CanCollide = false
@@ -375,11 +335,14 @@ visualizer.Color = VisualizerColor
 visualizer.BottomSurface = Enum.SurfaceType.Smooth
 visualizer.TopSurface = Enum.SurfaceType.Smooth
 
--- Visualizer Loop
+local RunService = game:GetService("RunService")
 RunService.RenderStepped:Connect(function()
     if ReachEnabled and VisualizerEnabled then
+        local myChar = LocalPlayer.Character
+        local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
         local dp = getDamagingPart()
-        if dp then
+        
+        if myHRP and dp then
             visualizer.Parent = workspace
             visualizer.Color = VisualizerColor
             visualizer.Transparency = VisualizerTransparency
@@ -388,10 +351,10 @@ RunService.RenderStepped:Connect(function()
                 visualizer.Shape = Enum.PartType.Ball
                 visualizer.Size = Vector3.new(ReachDistance, ReachDistance, ReachDistance)
                 visualizer.CFrame = dp.CFrame
-            else -- Line
+            else -- Line Reach (Corrected to project from HumanoidRootPart directly in front)
                 visualizer.Shape = Enum.PartType.Block
-                visualizer.Size = Vector3.new(1, 1, ReachDistance)
-                visualizer.CFrame = dp.CFrame * CFrame.new(0, 0, -(ReachDistance / 2))
+                visualizer.Size = Vector3.new(6, 6, ReachDistance)
+                visualizer.CFrame = myHRP.CFrame * CFrame.new(0, 0, -(ReachDistance / 2) - 2)
             end
         else
             visualizer.Parent = nil
@@ -401,65 +364,121 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Main Reach Execution Loop (RenderStepped)
+-- Main Combat/Reach Loop (RenderStepped)
 RunService.RenderStepped:Connect(function()
-    if not ReachEnabled then return end
-    
     local myChar = LocalPlayer.Character
     local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
     if not myHRP then return end
     
     local dp = getDamagingPart()
-    if not dp then return end
     
-    pcall(function()
-        for _, targetPlayer in ipairs(Players:GetPlayers()) do
-            if targetPlayer ~= LocalPlayer and targetPlayer.Character then
-                local tChar = targetPlayer.Character
-                local tHRP = tChar:FindFirstChild("HumanoidRootPart")
-                local tHum = tChar:FindFirstChildOfClass("Humanoid")
-                
-                if tHRP and tHum and tHum.Health > 0 then
-                    local dist = (tHRP.Position - myHRP.Position).Magnitude
-                    if dist <= ReachDistance then
-                        -- 1. CBring Teleportation
-                        if UseCBring then
-                            local partsToBring = {
-                                tChar:FindFirstChild("Left Arm"),
-                                tChar:FindFirstChild("LeftLowerArm"),
-                                tChar:FindFirstChild("LeftHand"),
-                                tChar:FindFirstChild("Right Arm"),
-                                tChar:FindFirstChild("RightLowerArm"),
-                                tChar:FindFirstChild("RightHand"),
-                                tChar:FindFirstChild("Torso"),
-                                tChar:FindFirstChild("UpperTorso"),
-                                tChar:FindFirstChild("LowerTorso")
-                            }
-                            for _, part in ipairs(partsToBring) do
-                                if part then
-                                    part.CFrame = myHRP.CFrame * CFrame.new(0, 0, -3.5)
-                                end
-                            end
+    if ReachEnabled and dp then
+        pcall(function()
+            for _, targetPlayer in ipairs(Players:GetPlayers()) do
+                if targetPlayer ~= LocalPlayer and targetPlayer.Character then
+                    local tChar = targetPlayer.Character
+                    local tHRP = tChar:FindFirstChild("HumanoidRootPart")
+                    local tHum = tChar:FindFirstChildOfClass("Humanoid")
+                    
+                    if tHRP and tHum and tHum.Health > 0 then
+                        local relativePos = myHRP.CFrame:PointToObjectSpace(tHRP.Position)
+                        local inRange = false
+                        
+                        if ReachType == "Sphere" then
+                            inRange = (tHRP.Position - myHRP.Position).Magnitude <= ReachDistance
+                        else
+                            inRange = (relativePos.Z < 0) and (-relativePos.Z <= ReachDistance) and (math.abs(relativePos.X) <= 6) and (math.abs(relativePos.Y) <= 6)
                         end
                         
-                        -- 2. FTI (Fast TouchInterest) Simulation
-                        if UseFTI then
-                            for _, child in ipairs(tChar:GetChildren()) do
-                                if child:IsA("BasePart") then
-                                    firetouchinterest(child, dp, 0)
-                                    firetouchinterest(child, dp, 1)
+                        if inRange then
+                            -- 1. CBring (locally teleports parts and caches offsets for resync)
+                            if UseCBring then
+                                local partsToBring = {
+                                    tChar:FindFirstChild("Left Arm"),
+                                    tChar:FindFirstChild("LeftLowerArm"),
+                                    tChar:FindFirstChild("LeftHand"),
+                                    tChar:FindFirstChild("Right Arm"),
+                                    tChar:FindFirstChild("RightLowerArm"),
+                                    tChar:FindFirstChild("RightHand"),
+                                    tChar:FindFirstChild("Torso"),
+                                    tChar:FindFirstChild("UpperTorso"),
+                                    tChar:FindFirstChild("LowerTorso")
+                                }
+                                for _, part in ipairs(partsToBring) do
+                                    if part then
+                                        if not cbringActiveParts[part] then
+                                            cbringActiveParts[part] = {
+                                                Offset = tHRP.CFrame:ToObjectSpace(part.CFrame),
+                                                CanCollide = part.CanCollide,
+                                                HRP = tHRP
+                                            }
+                                        end
+                                        part.CanCollide = false
+                                        part.CFrame = myHRP.CFrame * CFrame.new(0, 0, -3.5)
+                                    end
+                                end
+                            end
+                            
+                            -- 2. FTI (Fast TouchInterest simulation)
+                            if UseFTI then
+                                for _, child in ipairs(tChar:GetChildren()) do
+                                    if child:IsA("BasePart") then
+                                        firetouchinterest(child, dp, 0)
+                                        firetouchinterest(child, dp, 1)
+                                    end
                                 end
                             end
                         end
                     end
                 end
             end
+        end)
+    end
+
+    -- Clean up and resync positions for parts that are out of reach or if CBring is disabled
+    for part, data in pairs(cbringActiveParts) do
+        local shouldRestore = false
+        if not ReachEnabled or not UseCBring then
+            shouldRestore = true
+        else
+            local hrp = data.HRP
+            if hrp and hrp.Parent then
+                local relativePos = myHRP.CFrame:PointToObjectSpace(hrp.Position)
+                local inRange = false
+                if ReachType == "Sphere" then
+                    inRange = (hrp.Position - myHRP.Position).Magnitude <= ReachDistance
+                else
+                    inRange = (relativePos.Z < 0) and (-relativePos.Z <= ReachDistance) and (math.abs(relativePos.X) <= 6) and (math.abs(relativePos.Y) <= 6)
+                end
+                if not inRange then
+                    shouldRestore = true
+                end
+            else
+                shouldRestore = true
+            end
         end
-    end)
+
+        if shouldRestore then
+            pcall(function()
+                if part and part.Parent and data.HRP and data.HRP.Parent then
+                    part.CFrame = data.HRP.CFrame * data.Offset
+                    part.CanCollide = data.CanCollide
+                end
+            end)
+            cbringActiveParts[part] = nil
+        end
+    end
 end)
 
 -- Aimbot Target Acquisition
 local function getAimbotTarget()
+    if currentAimbotTarget and currentAimbotTarget.Parent then
+        local hum = currentAimbotTarget.Parent:FindFirstChildOfClass("Humanoid")
+        if hum and hum.Health > 0 then
+            return currentAimbotTarget
+        end
+    end
+
     local target = nil
     local minVal = math.huge
     local myChar = LocalPlayer.Character
@@ -474,20 +493,21 @@ local function getAimbotTarget()
                 local tHRP = tChar:FindFirstChild("HumanoidRootPart")
                 local tHum = tChar:FindFirstChildOfClass("Humanoid")
                 if tHRP and tHum and tHum.Health > 0 then
+                    local targetPart = tChar:FindFirstChild(AimbotPart) or tHRP
                     if AimbotTargetMode == "Distance" then
                         local dist = (tHRP.Position - myHRP.Position).Magnitude
                         if dist < minVal then
                             minVal = dist
-                            target = tChar:FindFirstChild(AimbotPart) or tHRP
+                            target = targetPart
                         end
                     elseif AimbotTargetMode == "Mouse" then
-                        local pos, onScreen = Camera:WorldToViewportPoint(tHRP.Position)
+                        local pos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
                         if onScreen then
-                            local mousePos = UserInputService:GetMouseLocation()
+                            local mousePos = game:GetService("UserInputService"):GetMouseLocation()
                             local dist = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
                             if dist < minVal and dist <= AimbotFOV then
                                 minVal = dist
-                                target = tChar:FindFirstChild(AimbotPart) or tHRP
+                                target = targetPart
                             end
                         end
                     end
@@ -495,56 +515,68 @@ local function getAimbotTarget()
             end
         end
     end)
+    
+    currentAimbotTarget = target
     return target
 end
 
--- Aimbot Thread Loop
-RunService.RenderStepped:Connect(function()
+-- Aimbot Camera Binder (Enum.RenderPriority.Camera.Value + 1 overrides default camera scripts and prevents desync/jitter)
+RunService:BindToRenderStep("AntigravityAimbot", Enum.RenderPriority.Camera.Value + 1, function()
     if AimbotEnabled and AimbotActive then
         local target = getAimbotTarget()
         if target then
             local Camera = workspace.CurrentCamera
-            local currentCFrame = Camera.CFrame
             local targetLook = CFrame.new(Camera.CFrame.Position, target.Position)
-            Camera.CFrame = currentCFrame:Lerp(targetLook, AimbotSmoothness)
+            Camera.CFrame = Camera.CFrame:Lerp(targetLook, AimbotSmoothness)
         end
     end
 end)
 
--- Aimbot Input Handlers
+-- Input check handler for Keyboard & Mouse buttons
+local function checkAimbotInput(input)
+    if AimbotMouse then
+        return input.UserInputType == AimbotMouse
+    else
+        return input.KeyCode == AimbotKey
+    end
+end
+
+local UserInputService = game:GetService("UserInputService")
 UserInputService.InputBegan:Connect(function(input, gpe)
     if gpe then return end
-    if input.KeyCode == AimbotKeybind then
+    if checkAimbotInput(input) then
         if AimbotMode == "Hold" then
             AimbotActive = true
         else
             AimbotActive = not AimbotActive
+            if not AimbotActive then
+                currentAimbotTarget = nil
+            end
         end
     end
 end)
 
 UserInputService.InputEnded:Connect(function(input, gpe)
     if gpe then return end
-    if input.KeyCode == AimbotKeybind then
+    if checkAimbotInput(input) then
         if AimbotMode == "Hold" then
             AimbotActive = false
+            currentAimbotTarget = nil
         end
     end
 end)
 
--- Auto Clicker Thread Loop
+-- Auto Clicker Loop Thread (Checks if local user is currently typing to prevent chat interference)
 task.spawn(function()
     while true do
         task.wait(AutoClickerDelay)
-        if AutoClickerEnabled then
+        if AutoClickerEnabled and not isTyping() then
             pcall(function()
                 local myChar = LocalPlayer.Character
                 local myTool = myChar and myChar:FindFirstChildOfClass("Tool")
                 if myTool then
                     myTool:Activate()
                 end
-                
-                -- Universal mouse click simulation for toolless systems
                 local vu = game:GetService("VirtualUser")
                 vu:CaptureController()
                 vu:ClickButton1(Vector2.new(0, 0))
@@ -553,7 +585,7 @@ task.spawn(function()
     end
 end)
 
--- Tank Mode State Keep-Alive Loops
+-- Keep-Alive loops for Tank Mode (re-evaluates CanTouch state on character load/respawn)
 LocalPlayer.CharacterAdded:Connect(function()
     task.wait(0.5)
     if TankModeEnabled then
@@ -570,13 +602,13 @@ task.spawn(function()
     end
 end)
 
--- Menu Hide/Show Keybind
+-- Toggle Exploit GUI visibility Keybind listener
 UserInputService.InputBegan:Connect(function(input, gpe)
     if gpe then return end
     if input.KeyCode == UIKey then
-        local RayfieldGui = game:GetService("CoreGui"):FindFirstChild("Rayfield") or LocalPlayer.PlayerGui:FindFirstChild("Rayfield")
-        if RayfieldGui then
-            RayfieldGui.Enabled = not RayfieldGui.Enabled
+        local OrionGui = game:GetService("CoreGui"):FindFirstChild("Orion") or LocalPlayer.PlayerGui:FindFirstChild("Orion")
+        if OrionGui then
+            OrionGui.Enabled = not OrionGui.Enabled
         end
     end
 end)
