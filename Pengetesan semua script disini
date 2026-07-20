@@ -62,7 +62,7 @@ end
 
 -- Load Orion UI Library
 local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/jensonhirst/Orion/main/source')))()
-local Window = OrionLib:MakeWindow({Name = "Scriptz", HidePremium = true, SaveConfig = false, IntroText = "Scriptz Boxing"})
+local Window = OrionLib:MakeWindow({Name = "Fix", HidePremium = true, SaveConfig = false, IntroText = "Boxing"})
 
 -- Global Config States (Optimal safe combat defaults)
 local ReachEnabled = false
@@ -89,10 +89,6 @@ local AimbotMouse = nil
 
 local TankModeEnabled = false
 local UIKey = Enum.KeyCode.RightShift
-
-local AntiPushEnabled = true
-local FtiCooldown = 0.12
-local lastFtiTick = {}
 
 local cbringActiveParts = {}
 local currentAimbotTarget = nil
@@ -147,27 +143,6 @@ TabReach:AddToggle({
     Default = false,
     Callback = function(state)
         UseFTI = state
-    end
-})
-
-TabReach:AddToggle({
-    Name = "Anti-Push (No Knockback)",
-    Default = true,
-    Callback = function(state)
-        AntiPushEnabled = state
-    end
-})
-
-TabReach:AddSlider({
-    Name = "FTI Delay (ms)",
-    Min = 50,
-    Max = 300,
-    Default = 120,
-    Color = Color3.fromRGB(0, 170, 255),
-    Increment = 10,
-    ValueName = "ms",
-    Callback = function(value)
-        FtiCooldown = value / 1000
     end
 })
 
@@ -403,14 +378,6 @@ RunService.RenderStepped:Connect(function()
         end
     end
     
-    -- Anti-Push: Clamp horizontal recoil velocity caused by thrust/lunge attacks
-    if AntiPushEnabled and myHRP then
-        local vel = myHRP.AssemblyLinearVelocity
-        if math.abs(vel.X) > 20 or math.abs(vel.Z) > 20 then
-            myHRP.AssemblyLinearVelocity = Vector3.new(0, vel.Y, 0)
-        end
-    end
-
     local dp = getDamagingPart()
     
     if ReachEnabled and dp then
@@ -440,13 +407,7 @@ RunService.RenderStepped:Connect(function()
                                     tChar:FindFirstChild("LeftHand"),
                                     tChar:FindFirstChild("Right Arm"),
                                     tChar:FindFirstChild("RightLowerArm"),
-                                    tChar:FindFirstChild("RightHand"),
-                                    tChar:FindFirstChild("Left Leg"),
-                                    tChar:FindFirstChild("LeftLowerLeg"),
-                                    tChar:FindFirstChild("LeftFoot"),
-                                    tChar:FindFirstChild("Right Leg"),
-                                    tChar:FindFirstChild("RightLowerLeg"),
-                                    tChar:FindFirstChild("RightFoot")
+                                    tChar:FindFirstChild("RightHand")
                                 }
                                 for _, part in ipairs(partsToBring) do
                                     if part then
@@ -458,27 +419,20 @@ RunService.RenderStepped:Connect(function()
                                             }
                                         end
                                         part.CanCollide = false
+                                        pcall(function()
+                                            part:BreakJoints()
+                                        end)
                                         part.CFrame = myHRP.CFrame * CFrame.new(0, 0, -3.5)
                                     end
                                 end
                             end
                             
-                            -- 2. FTI (Fast TouchInterest simulation with rate-limiting to prevent thrust recoil)
+                            -- 2. FTI (Fast TouchInterest simulation)
                             if UseFTI then
-                                local now = tick()
-                                local lastHit = lastFtiTick[tChar] or 0
-                                if (now - lastHit) >= FtiCooldown then
-                                    lastFtiTick[tChar] = now
-                                    local targetParts = {
-                                        tChar:FindFirstChild("HumanoidRootPart"),
-                                        tChar:FindFirstChild("Torso") or tChar:FindFirstChild("UpperTorso"),
-                                        tChar:FindFirstChild("Head")
-                                    }
-                                    for _, part in ipairs(targetParts) do
-                                        if part then
-                                            firetouchinterest(part, dp, 0)
-                                            firetouchinterest(part, dp, 1)
-                                        end
+                                for _, child in ipairs(tChar:GetChildren()) do
+                                    if child:IsA("BasePart") then
+                                        firetouchinterest(child, dp, 0)
+                                        firetouchinterest(child, dp, 1)
                                     end
                                 end
                             end
