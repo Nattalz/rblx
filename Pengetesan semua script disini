@@ -62,7 +62,7 @@ end
 
 -- Load Orion UI Library
 local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/jensonhirst/Orion/main/source')))()
-local Window = OrionLib:MakeWindow({Name = "Antigravity Boxing", HidePremium = true, SaveConfig = false, IntroText = "Antigravity Boxing"})
+local Window = OrionLib:MakeWindow({Name = "Scriptz", HidePremium = true, SaveConfig = false, IntroText = "Scriptz Boxing"})
 
 -- Global Config States (Optimal safe combat defaults)
 local ReachEnabled = false
