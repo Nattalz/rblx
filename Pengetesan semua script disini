@@ -1,8 +1,4 @@
---[[
-    Antigravity Boxing Exploit & AC Bypass
-    GUI Library: Orion UI Library
-    Bypasses: PVEye Anti-Cheat, WWE Advanced Anti-Cheat, OPRW Custom AC
---]]
+
 
 -- Safe Instance-based destruction (No hooks to bypass Adonis)
 local Players = game:GetService("Players")
@@ -62,7 +58,7 @@ end
 
 -- Load Orion UI Library
 local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/jensonhirst/Orion/main/source')))()
-local Window = OrionLib:MakeWindow({Name = "Fix 2", HidePremium = true, SaveConfig = false, IntroText = "Boxing"})
+local Window = OrionLib:MakeWindow({Name = "Boxing", HidePremium = true, SaveConfig = false, IntroText = "Boxing"})
 
 -- Global Config States (Optimal safe combat defaults)
 local ReachEnabled = false
@@ -396,11 +392,7 @@ RunService.RenderStepped:Connect(function()
                             if UseCBring then
                                 local partsToBring = {
                                     tChar:FindFirstChild("Left Arm"),
-                                    tChar:FindFirstChild("LeftLowerArm"),
-                                    tChar:FindFirstChild("LeftHand"),
-                                    tChar:FindFirstChild("Right Arm"),
-                                    tChar:FindFirstChild("RightLowerArm"),
-                                    tChar:FindFirstChild("RightHand")
+                                    tChar:FindFirstChild("Left Leg")
                                 }
                                 for _, part in ipairs(partsToBring) do
                                     if part then
@@ -415,18 +407,17 @@ RunService.RenderStepped:Connect(function()
                                         pcall(function()
                                             part:BreakJoints()
                                         end)
-                                        part.CFrame = myHRP.CFrame * CFrame.new(0, 0, -3.5)
+                                        part.CFrame = myHRP.CFrame * CFrame.new(1, 0, -3.5)
                                     end
                                 end
                             end
                             
                             -- 2. FTI (Fast TouchInterest simulation)
                             if UseFTI then
-                                for _, child in ipairs(tChar:GetChildren()) do
-                                    if child:IsA("BasePart") then
-                                        firetouchinterest(child, dp, 0)
-                                        firetouchinterest(child, dp, 1)
-                                    end
+                                local targetLimb = tChar:FindFirstChild("Left Arm") or tChar:FindFirstChild("Left Leg")
+                                if targetLimb then
+                                    firetouchinterest(targetLimb, dp, 0)
+                                    firetouchinterest(targetLimb, dp, 1)
                                 end
                             end
                         end
