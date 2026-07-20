@@ -62,7 +62,7 @@ end
 
 -- Load Orion UI Library
 local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/jensonhirst/Orion/main/source')))()
-local Window = OrionLib:MakeWindow({Name = "Fix", HidePremium = true, SaveConfig = false, IntroText = "Boxing"})
+local Window = OrionLib:MakeWindow({Name = "Fix 2", HidePremium = true, SaveConfig = false, IntroText = "Boxing"})
 
 -- Global Config States (Optimal safe combat defaults)
 local ReachEnabled = false
@@ -371,13 +371,6 @@ RunService.RenderStepped:Connect(function()
     local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
     if not myHRP then return end
 
-    -- Disable local character collision (except root) during CBring to prevent pushing/forces
-    for _, part in ipairs(myChar:GetDescendants()) do
-        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-            part.CanCollide = not (ReachEnabled and UseCBring)
-        end
-    end
-    
     local dp = getDamagingPart()
     
     if ReachEnabled and dp then
