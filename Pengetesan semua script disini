@@ -9,6 +9,7 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local StarterGui = game:GetService("StarterGui")
+local UserInputService = game:GetService("UserInputService")
 
 local function clearCustomAC()
     local Tracker = PlayerGui:FindFirstChild("Tracker")
@@ -61,7 +62,7 @@ end
 
 -- Load Orion UI Library
 local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/jensonhirst/Orion/main/source')))()
-local Window = OrionLib:MakeWindow({Name = "Scripts", HidePremium = true, SaveConfig = false, IntroText = "Loading", ToggleKeyInfo = Enum.KeyCode.K})
+local Window = OrionLib:MakeWindow({Name = "Antigravity Boxing", HidePremium = true, SaveConfig = false, IntroText = "Antigravity Boxing"})
 
 -- Global Config States (Optimal safe combat defaults)
 local ReachEnabled = false
@@ -89,6 +90,10 @@ local AimbotMouse = nil
 local TankModeEnabled = false
 local UIKey = Enum.KeyCode.RightShift
 
+local AntiPushEnabled = true
+local FtiCooldown = 0.12
+local lastFtiTick = {}
+
 local cbringActiveParts = {}
 local currentAimbotTarget = nil
 
@@ -96,7 +101,7 @@ local currentAimbotTarget = nil
 local TabReach = Window:MakeTab({Name = "Reach", Icon = "rbxassetid://4483362458", PremiumOnly = false})
 local TabCombat = Window:MakeTab({Name = "Combat", Icon = "rbxassetid://4483362458", PremiumOnly = false})
 local TabTank = Window:MakeTab({Name = "Tank & AC", Icon = "rbxassetid://4483362458", PremiumOnly = false})
---local TabSettings = Window:MakeTab({Name = "Settings", Icon = "rbxassetid://4483362458", PremiumOnly = false})
+local TabSettings = Window:MakeTab({Name = "Settings", Icon = "rbxassetid://4483362458", PremiumOnly = false})
 
 -- 1. Reach Tab Elements
 TabReach:AddToggle({
@@ -142,6 +147,27 @@ TabReach:AddToggle({
     Default = false,
     Callback = function(state)
         UseFTI = state
+    end
+})
+
+TabReach:AddToggle({
+    Name = "Anti-Push (No Knockback)",
+    Default = true,
+    Callback = function(state)
+        AntiPushEnabled = state
+    end
+})
+
+TabReach:AddSlider({
+    Name = "FTI Delay (ms)",
+    Min = 50,
+    Max = 300,
+    Default = 120,
+    Color = Color3.fromRGB(0, 170, 255),
+    Increment = 10,
+    ValueName = "ms",
+    Callback = function(value)
+        FtiCooldown = value / 1000
     end
 })
 
@@ -293,14 +319,14 @@ TabTank:AddLabel("WWE Tool Bypass: Active (Autodestroyed)")
 TabTank:AddLabel("OPRW Bypass: Active (Autodestroyed)")
 
 -- 4. Settings Tab Elements
--- TabSettings:AddDropdown({
---     Name = "Toggle UI Key",
---     Default = "RightShift",
---     Options = {"RightShift", "LeftShift", "Insert", "Delete"},
---     Callback = function(option)
---         UIKey = Enum.KeyCode[option]
---     end
--- })
+TabSettings:AddDropdown({
+    Name = "Toggle UI Key",
+    Default = "RightShift",
+    Options = {"RightShift", "LeftShift", "Insert", "Delete"},
+    Callback = function(option)
+        UIKey = Enum.KeyCode[option]
+    end
+})
 
 -- Initialize Orion UI
 OrionLib:Init()
@@ -369,7 +395,22 @@ RunService.RenderStepped:Connect(function()
     local myChar = LocalPlayer.Character
     local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
     if not myHRP then return end
+
+    -- Disable local character collision (except root) during CBring to prevent pushing/forces
+    for _, part in ipairs(myChar:GetDescendants()) do
+        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+            part.CanCollide = not (ReachEnabled and UseCBring)
+        end
+    end
     
+    -- Anti-Push: Clamp horizontal recoil velocity caused by thrust/lunge attacks
+    if AntiPushEnabled and myHRP then
+        local vel = myHRP.AssemblyLinearVelocity
+        if math.abs(vel.X) > 20 or math.abs(vel.Z) > 20 then
+            myHRP.AssemblyLinearVelocity = Vector3.new(0, vel.Y, 0)
+        end
+    end
+
     local dp = getDamagingPart()
     
     if ReachEnabled and dp then
@@ -400,9 +441,12 @@ RunService.RenderStepped:Connect(function()
                                     tChar:FindFirstChild("Right Arm"),
                                     tChar:FindFirstChild("RightLowerArm"),
                                     tChar:FindFirstChild("RightHand"),
-                                    tChar:FindFirstChild("Torso"),
-                                    tChar:FindFirstChild("UpperTorso"),
-                                    tChar:FindFirstChild("LowerTorso")
+                                    tChar:FindFirstChild("Left Leg"),
+                                    tChar:FindFirstChild("LeftLowerLeg"),
+                                    tChar:FindFirstChild("LeftFoot"),
+                                    tChar:FindFirstChild("Right Leg"),
+                                    tChar:FindFirstChild("RightLowerLeg"),
+                                    tChar:FindFirstChild("RightFoot")
                                 }
                                 for _, part in ipairs(partsToBring) do
                                     if part then
@@ -419,12 +463,22 @@ RunService.RenderStepped:Connect(function()
                                 end
                             end
                             
-                            -- 2. FTI (Fast TouchInterest simulation)
+                            -- 2. FTI (Fast TouchInterest simulation with rate-limiting to prevent thrust recoil)
                             if UseFTI then
-                                for _, child in ipairs(tChar:GetChildren()) do
-                                    if child:IsA("BasePart") then
-                                        firetouchinterest(child, dp, 0)
-                                        firetouchinterest(child, dp, 1)
+                                local now = tick()
+                                local lastHit = lastFtiTick[tChar] or 0
+                                if (now - lastHit) >= FtiCooldown then
+                                    lastFtiTick[tChar] = now
+                                    local targetParts = {
+                                        tChar:FindFirstChild("HumanoidRootPart"),
+                                        tChar:FindFirstChild("Torso") or tChar:FindFirstChild("UpperTorso"),
+                                        tChar:FindFirstChild("Head")
+                                    }
+                                    for _, part in ipairs(targetParts) do
+                                        if part then
+                                            firetouchinterest(part, dp, 0)
+                                            firetouchinterest(part, dp, 1)
+                                        end
                                     end
                                 end
                             end
@@ -541,7 +595,6 @@ local function checkAimbotInput(input)
     end
 end
 
-local UserInputService = game:GetService("UserInputService")
 UserInputService.InputBegan:Connect(function(input, gpe)
     if gpe then return end
     if checkAimbotInput(input) then
@@ -602,32 +655,29 @@ task.spawn(function()
     end
 end)
 
+-- Helper: Find Orion ScreenGui dynamically across RobloxGui, CoreGui, and PlayerGui
+local function getOrionGui()
+    local rg = game:GetService("CoreGui"):FindFirstChild("RobloxGui")
+    if rg and rg:FindFirstChild("Orion") then
+        return rg.Orion
+    end
+    local o = game:GetService("CoreGui"):FindFirstChild("Orion")
+    if o then return o end
+    
+    local pg = LocalPlayer:FindFirstChild("PlayerGui")
+    if pg then
+        if pg:FindFirstChild("Orion") then return pg.Orion end
+    end
+    return nil
+end
+
 -- Toggle Exploit GUI visibility Keybind listener
 UserInputService.InputBegan:Connect(function(input, gpe)
     if gpe then return end
     if input.KeyCode == UIKey then
-        local OrionGui = game:GetService("CoreGui"):FindFirstChild("Orion") or LocalPlayer.PlayerGui:FindFirstChild("Orion")
+        local OrionGui = getOrionGui()
         if OrionGui then
             OrionGui.Enabled = not OrionGui.Enabled
-        end
-    end
-end)
-
-local isOpen = true
-
-UIS.InputBegan:Connect(function(input, isTyping)
-    if isTyping then return end
-    
-    -- Change "K" to whatever key you prefer
-    if input.KeyCode == Enum.KeyCode.K then
-        if isOpen then
-            -- This hides the Orion interface
-            OrionLib:Toggle() 
-            isOpen = false
-        else
-            -- This shows it again
-            OrionLib:Toggle() 
-            isOpen = true
         end
     end
 end)
